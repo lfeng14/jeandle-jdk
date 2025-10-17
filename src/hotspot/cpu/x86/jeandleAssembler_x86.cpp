@@ -66,7 +66,12 @@ void JeandleAssembler::patch_static_call_site(int inst_offset, CallSiteInfo* cal
   __ code()->set_insts_end(call_address);
 
   // Patch.
-  __ call(AddressLiteral(call->target(), relocInfo::static_call_type));
+  if (call->target() == SharedRuntime::get_resolve_opt_virtual_call_stub()) {
+    __ call(AddressLiteral(call->target(), relocInfo::opt_virtual_call_type));
+  } else {
+    assert(call->target() == SharedRuntime::get_resolve_static_call_stub(), "illegal call target");
+    __ call(AddressLiteral(call->target(), relocInfo::static_call_type));
+  }
   assert(__ offset() % 4 == 0, "must be aligned for MT-safe patch");
 
   // Recover insts_end.
