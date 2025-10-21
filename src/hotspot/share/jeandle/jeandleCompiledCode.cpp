@@ -206,6 +206,64 @@ void JeandleCompiledCode::install_obj(std::unique_ptr<ObjectBuffer> obj) {
   }
 }
 
+void JeandleCompiledCode::estimate_codebuffer_size(int& const_size, int& stubs_size) {
+  // Step 1: Resolve LinkGraph.
+  for (auto *block : _link_graph->blocks()) {
+    // Only resolve relocations for instructions in the compiled method.
+    if (block->getSection().getName().compare(".text") != 0) {
+      continue;
+    }
+    for (auto& edge : block->edges()) {
+      auto& target = edge.getTarget();
+
+      if (!target.isDefined() && JeandleAssembler::is_routine_call_reloc_kind(edge.getKind())) {
+        // the trampoline stub also occupies a small amount of space; for example, on aarch64 it takes 4 or 16 bytes.
+        address target_addr = JeandleRuntimeRoutine::get_routine_entry(*target.getName());
+        int inst_end_offset = JeandleAssembler::fixup_routine_call_inst_offset(static_cast<int>(block->getAddress().getValue() + edge.getOffset()));
+        // TODO: Set the right bci.
+        _routine_call_sites[inst_end_offset] = new CallSiteInfo(JeandleCompiledCall::ROUTINE_CALL,
+                                                                target_addr,
+                                                                -1/* bci */);
+      } else if (target.isDefined() && JeandleAssembler::is_const_reloc_kind(edge.getKind())) {
+        // Const relocations.
+        const_size += 8;
+      }
+    }
+  }
+  // reserve a space for alignment
+  const_size += 8;
+  SectionInfo section_info(".llvm_stackmaps");
+  if (ReadELF::findSection(*_elf, section_info)) {
+    StackMapParser stackmaps(llvm::ArrayRef(((uint8_t*)object_start()) + section_info._offset, section_info._size));
+    for (auto record = stackmaps.records_begin(); record != stackmaps.records_end(); ++record) {
+      int inst_end_offset = static_cast<int>(record->getInstructionOffset());
+      CallSiteInfo* call_info = nullptr;
+      if (record->getID() < _non_routine_call_sites.size()) {
+        call_info = _non_routine_call_sites[record->getID()];
+        if (call_info && call_info->type() == JeandleCompiledCall::STATIC_CALL)
+          stubs_size += JeandleAssembler::get_max_stub_size();
+      } else {
+        call_info = _routine_call_sites[inst_end_offset];
+        if (call_info->type() == JeandleCompiledCall::ROUTINE_CALL) {
+          stubs_size += JeandleAssembler::get_max_routinecall_size();
+        }        
+      }
+    }
+  }
+}
+
+bool JeandleCompiledCode::createLinkGraph() {
+  auto ssp = std::make_shared<llvm::orc::SymbolStringPool>();
+  auto graph_on_err = llvm::jitlink::createLinkGraphFromObject(
+      _elf->getMemoryBufferRef(), ssp);
+  if (!graph_on_err) {
+    JeandleCompilation::report_jeandle_error("failed to create LinkGraph");
+    return false;
+  }
+  _link_graph = std::move(*graph_on_err);
+  return true;
+}
+
 void JeandleCompiledCode::finalize() {
   // Set up code buffer.
   uint64_t align;
@@ -216,13 +274,16 @@ void JeandleCompiledCode::finalize() {
     return;
   }
 
-  // An estimated initial value.
-  uint64_t consts_size = 6144 * wordSize;
+  if (!createLinkGraph()) {
+    return;
+  }
 
-  // TODO: How to figure out memory usage.
+  int consts_size = 0;
+  int stubs_size = 0;
+  estimate_codebuffer_size(consts_size, stubs_size);
   _code_buffer.initialize(code_size + consts_size + 2048/* for prolog */,
                           sizeof(relocInfo) + relocInfo::length_limit,
-                          128,
+                          stubs_size,
                           _env->oop_recorder());
   _code_buffer.initialize_consts_size(consts_size);
 
@@ -265,19 +326,7 @@ void JeandleCompiledCode::finalize() {
 
 void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
   llvm::SmallVector<JeandleReloc*> relocs;
-
-  // Step 1: Resolve LinkGraph.
-  auto ssp = std::make_shared<llvm::orc::SymbolStringPool>();
-
-  auto graph_on_err = llvm::jitlink::createLinkGraphFromObject(_elf->getMemoryBufferRef(), ssp);
-  if (!graph_on_err) {
-    JeandleCompilation::report_jeandle_error("failed to create LinkGraph");
-    return;
-  }
-
-  auto link_graph = std::move(*graph_on_err);
-
-  for (auto *block : link_graph->blocks()) {
+  for (auto *block : _link_graph->blocks()) {
     // Only resolve relocations for instructions in the compiled method.
     if (block->getSection().getName().compare(".text") != 0) {
       continue;
@@ -285,17 +334,7 @@ void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
     for (auto& edge : block->edges()) {
       auto& target = edge.getTarget();
 
-      if (!target.isDefined() && JeandleAssembler::is_routine_call_reloc_kind(edge.getKind())) {
-        // Routine call relocations.
-        address target_addr = JeandleRuntimeRoutine::get_routine_entry(*target.getName());
-
-        int inst_end_offset = JeandleAssembler::fixup_routine_call_inst_offset(static_cast<int>(block->getAddress().getValue() + edge.getOffset()));
-
-        // TODO: Set the right bci.
-        _routine_call_sites[inst_end_offset] = new CallSiteInfo(JeandleCompiledCall::ROUTINE_CALL,
-                                                                target_addr,
-                                                                -1/* bci */);
-      } else if (target.isDefined() && JeandleAssembler::is_const_reloc_kind(edge.getKind())) {
+      if (target.isDefined() && JeandleAssembler::is_const_reloc_kind(edge.getKind())) {
         // Const relocations.
         assert(target.getSection().getName().starts_with(".rodata"), "invalid const section");
         address target_addr = resolve_const_edge(*block, edge, assembler);
@@ -307,6 +346,8 @@ void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
         // Oop relocations.
         assert((*(target.getName())).starts_with("oop_handle"), "invalid oop relocation name");
         relocs.push_back(new JeandleOopReloc(static_cast<int>(block->getAddress().getValue() + edge.getOffset()), _oop_handles[(*(target.getName()))]));
+      } else if (!target.isDefined() && JeandleAssembler::is_routine_call_reloc_kind(edge.getKind())) {
+        continue;
       } else {
         // Unhandled relocations
         ShouldNotReachHere();
@@ -335,7 +376,6 @@ void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
       }
     }
   }
-
   // Step 3: Sort jeandle relocs.
   llvm::sort(relocs.begin(), relocs.end(), [](const JeandleReloc* lhs, const JeandleReloc* rhs) {
       return lhs->offset() < rhs->offset();

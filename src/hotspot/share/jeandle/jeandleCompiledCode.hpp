@@ -145,7 +145,8 @@ class JeandleCompiledCode : public StackObj {
                                                           // relocations of compiled object in resolve_reloc_info.
   llvm::SmallVector<CallSiteInfo*> _non_routine_call_sites; // Contains all other call sites,
                                                             // constructed during LLVM IR generating.
-
+                                                            
+  std::unique_ptr<llvm::jitlink::LinkGraph> _link_graph;
   llvm::StringMap<address> _const_sections;
   llvm::StringMap<jobject> _oop_handles;
   CodeOffsets _offsets;
@@ -159,7 +160,8 @@ class JeandleCompiledCode : public StackObj {
   std::string _func_name;
 
   void setup_frame_size();
-
+  bool createLinkGraph();
+  void estimate_codebuffer_size(int&, int&);
   void resolve_reloc_info(JeandleAssembler& assmebler);
 
   // Lookup address of const section in CodeBuffer.

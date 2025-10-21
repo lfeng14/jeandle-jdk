@@ -31,12 +31,21 @@
 
 #define __ _masm->
 
+int JeandleAssembler::get_max_stub_size() {
+  return 28;
+}
+
+int JeandleAssembler::get_max_routinecall_size() {
+  // x86 doesn't have a trampoline, but it will add htl hlt hlt at the end of the function.
+  return 4;
+}
+
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
   assert(inst_offset >= 0, "invalid call instruction address");
   assert(call->type() == JeandleCompiledCall::STATIC_CALL, "legal call type");
   address call_address = __ addr_at(inst_offset);
 
-  int stub_size = 28;
+  int stub_size = get_max_stub_size();
   address stub = __ start_a_stub(stub_size);
   if (stub == nullptr) {
     JeandleCompilation::report_jeandle_error("static call stub overflow");
