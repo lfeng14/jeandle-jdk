@@ -36,7 +36,7 @@ int JeandleAssembler::get_max_stub_size() {
 }
 
 int JeandleAssembler::get_max_routinecall_size() {
-  // x86 doesn't have a trampoline, but it will add htl hlt hlt at the end of the function.
+  // x86 doesn't have a trampoline, but will add htl hlt hlt at the end of the function.
   return 4;
 }
 

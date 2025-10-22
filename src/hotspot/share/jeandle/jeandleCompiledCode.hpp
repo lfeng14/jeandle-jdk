@@ -161,7 +161,7 @@ class JeandleCompiledCode : public StackObj {
 
   void setup_frame_size();
   bool createLinkGraph();
-  void estimate_codebuffer_size(int&, int&);
+  void estimate_codebuffer_size(int&, int&, int&);
   void resolve_reloc_info(JeandleAssembler& assmebler);
 
   // Lookup address of const section in CodeBuffer.
