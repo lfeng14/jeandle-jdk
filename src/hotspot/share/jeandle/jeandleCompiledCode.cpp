@@ -206,8 +206,8 @@ void JeandleCompiledCode::install_obj(std::unique_ptr<ObjectBuffer> obj) {
   }
 }
 
-void JeandleCompiledCode::estimate_codebuffer_size(int &const_size, int &stubs_size, int &exception_handler_size) {
-  exception_handler_size = JeandleAssembler::get_max_stub_size();
+void JeandleCompiledCode::estimate_codebuffer_size(int &const_size, int &stubs_size, int &exception_stub_size) {
+  exception_stub_size = JeandleAssembler::get_max_stub_size();
   for (const auto &Section : _elf->sections()) {
     llvm::Expected<llvm::StringRef> expected_sec_name = Section.getName();
     if (auto Err = expected_sec_name.takeError()) {
@@ -267,11 +267,11 @@ void JeandleCompiledCode::finalize() {
 
   int consts_size = 0;
   int stubs_size = 0;
-  int exception_handler_size = 0;
-  estimate_codebuffer_size(consts_size, stubs_size, exception_handler_size);
+  int exception_stub_size = 0;
+  estimate_codebuffer_size(consts_size, stubs_size, exception_stub_size);
   _code_buffer.initialize(code_size + consts_size + 2048/* for prolog */,
                           sizeof(relocInfo) + relocInfo::length_limit,
-                          stubs_size,
+                          stubs_size + exception_stub_size,
                           _env->oop_recorder());
   _code_buffer.initialize_consts_size(consts_size);
 
