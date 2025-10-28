@@ -31,12 +31,32 @@
 
 #define __ _masm->
 
+enum {
+  _max_stubs_size = 128,
+  // The x86 architecture does not have a trampoline.
+  _call_stub_size = 28,
+  _exception_handler_size = NativeJump::instruction_size + _max_stubs_size,
+  _routine_stub_size = NativCall::instruction_size
+};
+
+int JeandleAssembler::get_call_stub_size() {
+  return _call_stub_size;
+}
+
+int JeandleAssembler::get_exception_handler_size() {
+  return _exception_handler_size;
+}
+
+int JeandleAssembler::get_routine_stub_size() {
+  return _routine_stub_size;
+}
+
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
   assert(inst_offset >= 0, "invalid call instruction address");
   assert(call->type() == JeandleCompiledCall::STATIC_CALL, "legal call type");
   address call_address = __ addr_at(inst_offset);
 
-  int stub_size = 28;
+  int stub_size = _call_stub_size;
   address stub = __ start_a_stub(stub_size);
   if (stub == nullptr) {
     JEANDLE_REPORT_ERROR_AND_RET_VOID("static call stub overflow");

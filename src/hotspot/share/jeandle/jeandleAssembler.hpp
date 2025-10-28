@@ -79,6 +79,12 @@ class JeandleAssembler : public StackObj {
   // Mirrors C2's InteriorEntryAlignment flag.
   int interior_entry_alignment() const;
 
+  static int get_call_stub_size();
+
+  static int get_routine_stub_size();
+
+  static int get_exception_handler_size();
+
  private:
   MacroAssembler* _masm;
 

@@ -31,12 +31,33 @@
 
 #define __ _masm->
 
+enum {
+  _max_stubs_size = 128,
+  // call stub size: static call stub size + trampoline size
+  _call_stub_size = 13 * NativeInstruction::instruction_size,
+  // TODO: exception handler has not been implemented in aarch64.
+  _exception_handler_size = 0,
+  _routine_stub_size = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size
+};
+
+int JeandleAssembler::get_call_stub_size() {
+  return _call_stub_size;
+}
+
+int JeandleAssembler::get_exception_handler_size() {
+  return _exception_handler_size;
+}
+
+int JeandleAssembler::get_routine_stub_size() {
+  return _routine_stub_size;
+}
+
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
   assert(call->type() == JeandleCompiledCall::STATIC_CALL, "illegal call type");
   address call_address = __ addr_at(inst_offset);
 
   // same as C1 call_stub_size()
-  const int stub_size = 13 * NativeInstruction::instruction_size;
+  const int stub_size = _call_stub_size;
   address stub = __ start_a_stub(stub_size);
   if (stub == nullptr) {
     JEANDLE_REPORT_ERROR_AND_RET_VOID("static call stub overflow");

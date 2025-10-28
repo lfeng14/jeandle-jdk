@@ -113,6 +113,38 @@ void JeandleCompiledCode::install_obj(std::unique_ptr<ObjectBuffer> obj) {
   JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(_elf, "bad ELF file");
 }
 
+void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, int &stubs_size) {
+  for (const auto &Section: _elf->sections()) {
+    llvm::Expected <llvm::StringRef> expected_sec_name = Section.getName();
+    if (auto Err = expected_sec_name.takeError()) {
+      JeandleCompilation::report_jeandle_error("failed to get section name");
+      return;
+    }
+    llvm::StringRef sec_name = *expected_sec_name;
+    if (sec_name.starts_with(".rodata")) {
+      const_size += (int) Section.getSize() + Section.getAlignment().value();
+    }
+  }
+
+  SectionInfo section_info(".llvm_stackmaps");
+  if (ReadELF::findSection(*_elf, section_info)) {
+    StackMapParser stackmaps(llvm::ArrayRef(((uint8_t *) object_start()) + section_info._offset, section_info._size));
+    for (auto record = stackmaps.records_begin(); record != stackmaps.records_end(); ++record) {
+      CallSiteInfo *call_info = nullptr;
+      if (record->getID() < _non_routine_call_sites.size()) {
+        call_info = _non_routine_call_sites[record->getID()];
+        if (call_info && call_info->type() == JeandleCompiledCall::STATIC_CALL)
+          stubs_size += JeandleAssembler::get_call_stub_size();
+      } else {
+        // _routine_call_sites only contains routine call
+        stubs_size += JeandleAssembler::get_routine_stub_size();
+      }
+    }
+  }
+  // Add an exception handler size
+  stubs_size += JeandleAssembler::get_exception_handler_size();
+}
+
 void JeandleCompiledCode::finalize() {
   // Set up code buffer.
   uint64_t align;
@@ -125,13 +157,12 @@ void JeandleCompiledCode::finalize() {
   RETURN_VOID_ON_JEANDLE_ERROR();
   assert(_frame_size > 0, "frame size must be positive");
 
-  // An estimated initial value.
-  uint64_t consts_size = 6144 * wordSize;
-
-  // TODO: How to figure out memory usage.
+  int consts_size = 0;
+  int stubs_size = 0;
+  estimate_codebuffer_component_sizes(consts_size, stubs_size);
   _code_buffer.initialize(code_size + consts_size + 2048/* for prolog */,
                           sizeof(relocInfo) + relocInfo::length_limit,
-                          160,
+                          stubs_size,
                           _env->oop_recorder());
   if (_code_buffer.blob() == nullptr) {
     JEANDLE_REPORT_ERROR_AND_RET_VOID("CodeCache is full");
