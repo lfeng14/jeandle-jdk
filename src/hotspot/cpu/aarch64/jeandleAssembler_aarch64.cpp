@@ -31,14 +31,10 @@
 
 #define __ _masm->
 
-enum {
-  _max_stubs_size = 128,
-  // call stub size: static call stub size + trampoline size
-  _call_stub_size = 13 * NativeInstruction::instruction_size,
-  // TODO: exception handler has not been implemented in aarch64.
-  _exception_handler_size = 0,
-  _routine_stub_size = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size
-};
+const int JeandleAssembler::_call_stub_size         = 13 * NativeInstruction::instruction_size;
+const int JeandleAssembler::_routine_stub_size      = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size;
+// TODO: exception handler has not been implemented on aarch64.
+const int JeandleAssembler::_exception_handler_size = 0;
 
 int JeandleAssembler::get_call_stub_size() {
   return _call_stub_size;

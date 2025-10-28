@@ -114,15 +114,15 @@ void JeandleCompiledCode::install_obj(std::unique_ptr<ObjectBuffer> obj) {
 }
 
 void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, int &stubs_size) {
-  for (const auto &Section: _elf->sections()) {
-    llvm::Expected <llvm::StringRef> expected_sec_name = Section.getName();
+  for (const auto &section: _elf->sections()) {
+    llvm::Expected <llvm::StringRef> expected_sec_name = section.getName();
     if (auto Err = expected_sec_name.takeError()) {
       JeandleCompilation::report_jeandle_error("failed to get section name");
       return;
     }
     llvm::StringRef sec_name = *expected_sec_name;
     if (sec_name.starts_with(".rodata")) {
-      const_size += (int) Section.getSize() + Section.getAlignment().value();
+      const_size += (int) section.getSize() + section.getAlignment().value();
     }
   }
 
@@ -160,8 +160,8 @@ void JeandleCompiledCode::finalize() {
   int consts_size = 0;
   int stubs_size = 0;
   estimate_codebuffer_component_sizes(consts_size, stubs_size);
-  _code_buffer.initialize(code_size + consts_size + 2048/* for prolog */,
-                          sizeof(relocInfo) + relocInfo::length_limit,
+  _code_buffer.initialize(code_size + 2048/* for prolog */,
+                          20 * (sizeof(relocInfo) + relocInfo::length_limit), /* preinitialize the relocs to some large size */
                           stubs_size,
                           _env->oop_recorder());
   if (_code_buffer.blob() == nullptr) {

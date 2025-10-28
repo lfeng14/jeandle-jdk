@@ -89,6 +89,9 @@ class JeandleAssembler : public StackObj {
   MacroAssembler* _masm;
 
 #include CPU_HEADER(jeandleAssembler)
+ static const int _call_stub_size;
+ static const int _routine_stub_size;
+ static const int _exception_handler_size;
 };
 
 #endif // SHARE_JEANDLE_ASSEMBLER_HPP
