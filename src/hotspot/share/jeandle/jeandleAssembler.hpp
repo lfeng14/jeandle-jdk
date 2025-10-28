@@ -66,6 +66,12 @@ class JeandleAssembler : public StackObj {
 
   static bool is_const_reloc_kind(LinkKind kind);
 
+  static int get_call_stub_size();
+
+  static int get_routine_stub_size();
+
+  static int get_exception_handler_size();
+
  private:
   MacroAssembler* _masm;
 };

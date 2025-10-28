@@ -160,7 +160,9 @@ class JeandleCompiledCode : public StackObj {
 
   void setup_frame_size();
 
-  void resolve_reloc_info(JeandleAssembler& assmebler);
+  void estimate_codebuffer_component_sizes(int &, int &);
+
+  void resolve_reloc_info(JeandleAssembler &assmebler);
 
   // Lookup address of const section in CodeBuffer.
   address lookup_const_section(llvm::StringRef name, JeandleAssembler& assmebler);
