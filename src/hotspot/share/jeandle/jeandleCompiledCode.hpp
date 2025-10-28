@@ -160,7 +160,7 @@ class JeandleCompiledCode : public StackObj {
 
   void setup_frame_size();
 
-  void estimate_codebuffer_component_sizes(int &, int &);
+  void estimate_codebuffer_component_sizes(int &const_size, int &stubs_size);
 
   void resolve_reloc_info(JeandleAssembler &assmebler);
 

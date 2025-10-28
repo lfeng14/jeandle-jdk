@@ -31,13 +31,10 @@
 
 #define __ _masm->
 
-enum {
-  _max_stubs_size = 128,
-  // The x86 architecture does not have a trampoline.
-  _call_stub_size = 28,
-  _exception_handler_size = NativeJump::instruction_size + _max_stubs_size,
-  _routine_stub_size = NativCall::instruction_size
-};
+const int JeandleAssembler::_call_stub_size         = 28;
+// No need to emit routine stub on x86.
+const int JeandleAssembler::_routine_stub_size      = 0;
+const int JeandleAssembler::_exception_handler_size = NativeJump::instruction_size;
 
 int JeandleAssembler::get_call_stub_size() {
   return _call_stub_size;
@@ -154,7 +151,7 @@ void JeandleAssembler::emit_ic_check() {
 }
 
 int JeandleAssembler::emit_exception_handler() {
-  address base = __ start_a_stub(NativeJump::instruction_size);
+  address base = __ start_a_stub(_exception_handler_size);
   if (base == NULL) {
     JeandleCompilation::report_jeandle_error("CodeCache is full");
     return 0;

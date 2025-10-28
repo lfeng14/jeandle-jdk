@@ -74,6 +74,10 @@ class JeandleAssembler : public StackObj {
 
  private:
   MacroAssembler* _masm;
+
+ static const int _call_stub_size;
+ static const int _routine_stub_size;
+ static const int _exception_handler_size;
 };
 
 #endif // SHARE_JEANDLE_ASSEMBLER_HPP
