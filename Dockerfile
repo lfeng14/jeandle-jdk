@@ -1,0 +1,25 @@
+FROM ubuntu:24.04
+
+# Install essential build tools
+RUN apt-get update && \
+    apt-get install -y \
+        build-essential \
+        vim \
+        cmake \
+        gawk \
+        autoconf \
+        file \
+        unzip \
+        zip \
+        openjdk-21-jdk \
+        libasound2-dev \
+        libcups2-dev \
+        libfontconfig1-dev \
+        libx11-dev libxext-dev libxrender-dev libxrandr-dev libxtst-dev libxt-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Working directory
+WORKDIR /home/jeandle/
+
+# Default command for interactive development
+CMD ["bash"]
