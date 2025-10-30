@@ -11,6 +11,7 @@ RUN apt-get update && \
         file \
         unzip \
         zip \
+        jtreg7 \
         openjdk-21-jdk \
         libasound2-dev \
         libcups2-dev \
