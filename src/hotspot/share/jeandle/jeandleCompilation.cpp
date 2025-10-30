@@ -316,7 +316,8 @@ static std::string mangle_filename(const std::string &in) {
     case '(': case ';':
       break;
     case ')': case '-':
-      if (out.back() != '_')
+    case '.': case '/':
+      if (!out.empty() && out.back() != '_')
         out.push_back('_');
       break;
     default:
