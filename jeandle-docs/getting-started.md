@@ -6,8 +6,7 @@ For detailed guidance on getting started with upstream LLVM and OpenJDK, refer t
 + LLVM: [https://llvm.org/docs/GettingStarted.html](https://llvm.org/docs/GettingStarted.html)
 + OpenJDK: [https://openjdk.org/guide/](https://openjdk.org/guide/)
 
-To streamline environment configuration, a Dockerfile is provided based on Ubuntu 22.04. It builds a container image named jeandle-dev:latest.
-To build the image, run:
+To streamline environment configuration, a Dockerfile is provided. The following commands shows how to build a container image named jeandle-dev:latest.
 ```
 cd jeandle-jdk
 docker build -t jeandle-dev:latest -f Dockerfile .
