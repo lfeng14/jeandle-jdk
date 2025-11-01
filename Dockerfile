@@ -12,6 +12,7 @@ RUN apt-get update && \
         file \
         unzip \
         zip \
+        git \
         jtreg7 \
         openjdk-21-jdk \
         libasound2-dev \

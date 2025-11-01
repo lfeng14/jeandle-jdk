@@ -6,10 +6,21 @@ For detailed guidance on getting started with upstream LLVM and OpenJDK, refer t
 + LLVM: [https://llvm.org/docs/GettingStarted.html](https://llvm.org/docs/GettingStarted.html)
 + OpenJDK: [https://openjdk.org/guide/](https://openjdk.org/guide/)
 
-To streamline environment configuration, a Dockerfile is provided. The following commands shows how to build a container image named jeandle-dev:latest.
+To simplify the compilation environment setup, the jeandle-jdk repository provides a Dockerfile. Using this Dockerfile, you can launch a container equipped with a complete compilation toolchain, allowing you to directly compile both jeandle-jdk and jeandle-llvm inside the container. The following commands demonstrate how to build the jeandle project using this Dockerfile.
 ```
 cd jeandle-jdk
 docker build -t jeandle-dev:latest -f Dockerfile .
+```
+Launch the jeandle-dev container.
+```
+docker run -it --rm \
+  --name jeandle-dev \
+  -u $(id -u):$(id -g) \
+  -w /home/$(id -un) \
+  -v /etc/passwd:/etc/passwd:ro \
+  -v /etc/group:/etc/group:ro \
+  -v /home/$(id -un):/home/$(id -un) \
+  jeandle-dev:latest
 ```
 
 To get a quick start, follow the steps below:
@@ -24,7 +35,7 @@ git clone https://github.com/jeandle/jeandle-llvm.git
 cd jeandle-llvm
 mkdir build
 cd build
-cmake -G "Unix Makefiles" -DLLVM_TARGETS_TO_BUILD=X86 -DCMAKE_BUILD_TYPE="Release" -DCMAKE_INSTALL_PREFIX="/home/jeandle-llvm-install" -DLLVM_BUILD_LLVM_DYLIB=On -DLLVM_DYLIB_COMPONENTS=all ../llvm
+cmake -G "Unix Makefiles" -DLLVM_TARGETS_TO_BUILD=X86 -DCMAKE_BUILD_TYPE="Release" -DCMAKE_INSTALL_PREFIX="/home/user/jeandle-llvm-install" -DLLVM_BUILD_LLVM_DYLIB=On -DLLVM_DYLIB_COMPONENTS=all ../llvm
 cmake --build . --target install --parallel
 ```
 
@@ -37,9 +48,9 @@ git clone https://github.com/jeandle/jeandle-jdk.git
 ```
 cd jeandle-jdk
 bash configure \
-      --with-boot-jdk=/usr/local/java-21-openjdk-amd64/ \
+      --with-boot-jdk=/usr/ \
       --with-debug-level=release \
-      --with-jeandle-llvm=/home/jeandle-llvm-install
+      --with-jeandle-llvm=/home/user/jeandle-llvm-install
 make images
 ```
 Then the compiled JDK can be found in a directory like ```build/linux-x86_64-server-release/images/jdk/``` under the jeandle-jdk path.
