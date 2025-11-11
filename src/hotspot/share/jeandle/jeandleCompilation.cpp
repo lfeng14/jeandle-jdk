@@ -25,6 +25,7 @@
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Jeandle/Attributes.h"
 #include "llvm/IR/Jeandle/GCStrategy.h"
+#include "llvm/IR/Jeandle/Metadata.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/IRBuilder.h"
@@ -71,6 +72,11 @@ JeandleCompilation::JeandleCompilation(llvm::TargetMachine* target_machine,
                                        _context(std::make_unique<llvm::LLVMContext>()),
                                        _code(env, method),
                                        _error_msg(nullptr) {
+  if (entry_bci != InvocationEntryBci) {
+    env->record_method_not_compilable("OSR not supported");
+    return;
+  }
+
   // Setup compilation.
   initialize();
   setup_llvm_module(template_buffer);
@@ -81,7 +87,7 @@ JeandleCompilation::JeandleCompilation(llvm::TargetMachine* target_machine,
   if (error_occurred()) {
 #ifdef ASSERT
     if (JeandleCrashOnError) {
-      fatal("%s", _error_msg);
+      fatal("Compilation failed in function '%s': %s", _method->name()->as_utf8(), _error_msg);
     }
 #endif
     _env->record_method_not_compilable(_error_msg);
@@ -214,6 +220,9 @@ void JeandleCompilation::setup_llvm_module(llvm::MemoryBuffer* template_buffer) 
 
   _llvm_module->setModuleIdentifier(JeandleFuncSig::method_name(_method));
   _llvm_module->setDataLayout(*_data_layout);
+
+  llvm::NamedMDNode* metadata_node = _llvm_module->getOrInsertNamedMetadata(llvm::jeandle::Metadata::JavaMethodCompilation);
+  assert(metadata_node != nullptr, "invalid metadata node");
 }
 
 void JeandleCompilation::compile_java_method() {

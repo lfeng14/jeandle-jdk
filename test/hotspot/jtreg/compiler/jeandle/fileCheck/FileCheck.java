@@ -26,7 +26,10 @@ import jdk.test.lib.Utils;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 import java.io.File;
@@ -40,6 +43,10 @@ public class FileCheck {
     private List<String> lines;
 
     public FileCheck(String path, Method method, boolean optimized) throws Exception {
+        this(path, method, optimized, 0);
+    }
+
+    public FileCheck(String path, Method method, boolean optimized, int fileIndex) throws Exception {
         this.lineIndex = 0;
 
         Class declaringClass = method.getDeclaringClass();
@@ -72,12 +79,16 @@ public class FileCheck {
         if (files.isEmpty()) {
             throw new FileNotFoundException("No matched file found");
         }
-        if (files.size() > 1) {
-            // TODO: Support read more than one matched files.
-            System.out.println("FileCheck Warning: more than one matched files found, only reading one of them");
+
+        if (files.size() <= fileIndex) {
+            throw new IllegalArgumentException("fileIndex out of range");
         }
 
-        this.lines = Files.readAllLines(files.get(0))
+        List<Path> sortedFiles = files.stream()
+                                      .sorted(Comparator.comparing(iter -> iter.getFileName().toString()))
+                                      .collect(Collectors.toList());
+
+        this.lines = Files.readAllLines(sortedFiles.get(fileIndex))
                           .stream()
                           .map(str -> str.replaceAll("\\s+", " ").trim())
                           .filter(str -> !str.isEmpty())
@@ -130,6 +141,48 @@ public class FileCheck {
         content = content.replaceAll("\\s+", " ").trim();
         for (String str : this.lines) {
             if (str.contains(content)) {
+                found = true;
+                break;
+            }
+        }
+        Asserts.assertFalse(found, "File check not: " + content);
+    }
+
+    // Check whether the pattern is in the file.
+    public void checkPattern(String content) {
+        boolean found = false;
+        content = content.trim();
+        Pattern pattern = Pattern.compile(content);
+        while (this.lineIndex < lines.size()) {
+            if (pattern.matcher(lines.get(this.lineIndex)).find()) {
+                found = true;
+                this.lineIndex++;
+                break;
+            }
+            this.lineIndex++;
+        }
+        Asserts.assertTrue(found, "File check: " + content);
+    }
+
+    // Check whether the pattern is in the next line.
+    public void checkNextPattern(String content) {
+        boolean found = false;
+        content = content.trim();
+        Pattern pattern = Pattern.compile(content);
+        if (this.lineIndex < lines.size()) {
+            found = pattern.matcher(lines.get(this.lineIndex)).find();
+            this.lineIndex++;
+        }
+        Asserts.assertTrue(found, "File check next: " + content);
+    }
+
+    // Check whether the pattern isn't in the file.
+    public void checkNotPattern(String content) {
+        boolean found = false;
+        content = content.trim();
+        Pattern pattern = Pattern.compile(content);
+        for (String str : this.lines) {
+            if (pattern.matcher(str).find()) {
                 found = true;
                 break;
             }
