@@ -44,6 +44,9 @@
 ; Byte offsets for oopDesc structure fields.
 @oopDesc.klass_offset_in_bytes = external global i32
 
+; Keep use to lately-used java operations, until it is lowered.
+@llvm.used = appending addrspace(1) global [1 x ptr] [ptr @jeandle.card_table_barrier], section "llvm.metadata"
+
 ; Load klass pointer from oop
 define hotspotcc ptr addrspace(0) @jeandle.load_klass(ptr addrspace(1) nocapture %oop) noinline "lower-phase"="0" {
   %klass_offset = load i32, ptr @oopDesc.klass_offset_in_bytes
@@ -156,12 +159,15 @@ entry:
 }
 
 declare hotspotcc ptr @jeandle.current_thread()
-declare hotspotcc ptr addrspace(1) @new_typeArray(i32, i32, ptr)
+declare hotspotcc ptr addrspace(1) @new_array(ptr, i32, ptr)
 
-; Implementation of Java newarray operation.
-define hotspotcc ptr addrspace(1) @jeandle.newarray(i32 %type, i32 %length) noinline "lower-phase"="0"  {
+; Implementation of Java anewarray and newarray operation
+define private hotspotcc ptr addrspace(1) @jeandle.newarray(ptr %array_klass, i32 %length) noinline "lower-phase"="0"  {
 entry:
   %current_thread = call hotspotcc ptr @jeandle.current_thread()
-  %array_oop = call hotspotcc ptr addrspace(1) @new_typeArray(i32 %type, i32 %length, ptr %current_thread)
+  %array_oop = call hotspotcc ptr addrspace(1) @new_array(ptr %array_klass, i32 %length, ptr %current_thread)
   ret ptr addrspace(1) %array_oop
 }
+
+; Declaration of Java card table barrier.
+declare hotspotcc void @jeandle.card_table_barrier(ptr addrspace(1) %addr) noinline "lower-phase"="1";
