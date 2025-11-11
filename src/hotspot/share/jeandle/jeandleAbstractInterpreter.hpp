@@ -301,12 +301,8 @@ class JeandleAbstractInterpreter : public StackObj {
 
   int _oop_idx;
   std::string next_oop_name(const char* oop_name) {
-      if (!oop_name) return "oop_handle_" + std::to_string(_oop_idx++);
-      const char* dot = std::strrchr(oop_name, JVM_SIGNATURE_DOT);
-      const char* oop_type = dot ? dot + 1 : oop_name;
-      std::string result(oop_type);
-      std::transform(result.begin(), result.end(), result.begin(), ::tolower);
-      return std::string("oop_handle_") + result + "_" + std::to_string(_oop_idx++);
+      assert(oop_name != nullptr, "oop_name can not be null");
+      return std::string("oop_handle_") + std::string(oop_name) + "_" + std::to_string(_oop_idx++);
   }
 
   // Implementation of _get* and _put* bytecodes.
