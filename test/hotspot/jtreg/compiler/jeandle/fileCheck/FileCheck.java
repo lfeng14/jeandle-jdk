@@ -41,26 +41,6 @@ import java.lang.reflect.Method;
 public class FileCheck {
     private int lineIndex;
     private List<String> lines;
-    private static String mangleFilename(String in) {
-        StringBuilder out = new StringBuilder(in.length());
-        for (char c : in.toCharArray()) {
-            switch (c) {
-                case '[': case ']':
-                case '(': case ';':
-                    break;
-                case ')': case '-':
-                case '.': case '/':
-                    if (out.length() > 0 && out.charAt(out.length() - 1) != '_') {
-                        out.append('_');
-                    }
-                    break;
-                default:
-                    out.append(c);
-                    break;
-            }
-        }
-        return out.toString();
-    }
 
     public FileCheck(String path, Method method, boolean optimized) throws Exception {
         this(path, method, optimized, 0);
@@ -70,7 +50,7 @@ public class FileCheck {
         this.lineIndex = 0;
 
         Class declaringClass = method.getDeclaringClass();
-        String filePrefix = mangleFilename(declaringClass.getName() + "_" + method.getName() + "_" + getMethodSignature(method));
+        String filePrefix = declaringClass.getName().replace('.', '_') + "_" + method.getName();
         String fileSuffix = ".ll";
         String optimizedFileSuffix = "_optimized.ll";
 
