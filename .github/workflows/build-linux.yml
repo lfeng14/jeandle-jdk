@@ -131,22 +131,22 @@ jobs:
           # set CO_REPO and CO_BRANCH
           JDK_DIR=`pwd`
           EVENT_NAME="${{ github.event_name }}"
-
-          if [ "$EVENT_NAME" = 'pull_request_target' ]; then
-            echo "Triggered by pull_request_target, using defaults."
-            TARGET_REPO="https://github.com/jeandle/jeandle-llvm.git"
-            TARGET_BRANCH="main"
-          elif [ "$EVENT_NAME" = 'repository_dispatch' ]; then
+          if [ "$EVENT_NAME" = 'repository_dispatch' ]; then
             echo "Triggered by repository_dispatch, using client_payload."
             TARGET_REPO="https://github.com/${{ github.event.client_payload.target_llvm_repo }}.git"
             TARGET_BRANCH="${{ github.event.client_payload.target_llvm_ref }}"
           else
-            echo "Error: Unsupported event type: $EVENT_NAME"
-            exit 1
+            TARGET_REPO=`git log -n 1 | grep "CO_REPO" | sed -E 's/^[[:space:]]*CO_REPO[[:space:]]*:[[:space:]]*(.*)$/\1/'`
+            if [ -z "${TARGET_REPO}" ]; then
+              TARGET_REPO="https://github.com/jeandle/jeandle-llvm.git"
+            fi
+            echo "target repo of llvm: $TARGET_REPO"
+            TARGET_BRANCH=`git log -n 1 | grep "CO_BRANCH" | sed -E 's/^[[:space:]]*CO_BRANCH[[:space:]]*:[[:space:]]*(.*)$/\1/'`
+            if [ -z "${TARGET_BRANCH}" ]; then
+              TARGET_BRANCH="main"
+            fi
+            echo "target branch of llvm: $TARGET_BRANCH"
           fi
-
-          echo "target repo of llvm: $TARGET_REPO"
-          echo "target branch of llvm: $TARGET_BRANCH"
 
           # clone llvm
           pushd ../
