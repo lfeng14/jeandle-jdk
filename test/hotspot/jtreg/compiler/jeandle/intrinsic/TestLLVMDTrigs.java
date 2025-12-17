@@ -48,6 +48,12 @@ public class TestLLVMDTrigs {
 
     private static double v = Math.abs(1.0d);   // Force load java.lang.Math class
 
+    private static void assertWithinUlp(double computed, double reference, double maxUlp) {
+            double error = Math.abs(computed - reference);
+            double tolerance = maxUlp * StrictMath.ulp(reference);
+            Asserts.assertLTE(error, tolerance);
+    }
+
     private static final String[] baseProcArgs = new String[] {
         "-Xbatch", "-XX:-TieredCompilation", "-XX:+UseJeandleCompiler", "-Xcomp",
         "-Xlog:jeandle=debug", "-XX:+JeandleDumpIR",
@@ -218,8 +224,8 @@ public class TestLLVMDTrigs {
         Random random = new Random();
 
         // Test specific values
-        Asserts.assertLessThan(Math.abs(double_log_verified(Math.E) - double_log(Math.E)), PRECISION_THRESHOLD);
-        Asserts.assertLessThan(Math.abs(double_log_verified(1.0d) - double_log(1.0d)), PRECISION_THRESHOLD);
+        assertWithinUlp(double_log(Math.E), double_log_verified(Math.E), ULP_TOLERANCE);
+        assertWithinUlp(double_log(1.0d), double_log_verified(1.0d), ULP_TOLERANCE);
         Asserts.assertEquals(double_log_verified(Double.NaN), double_log(Double.NaN));
         Asserts.assertEquals(double_log_verified(Double.POSITIVE_INFINITY), double_log(Double.POSITIVE_INFINITY));
         Asserts.assertEquals(double_log_verified(0.0d), double_log(0.0d));
@@ -227,7 +233,7 @@ public class TestLLVMDTrigs {
         // Test random positive values
         for (int i = 0; i < 1000; i++) {
             double d = random.nextDouble() * 1000.0;
-            Asserts.assertLessThan(Math.abs(double_log_verified(d) - double_log(d)), PRECISION_THRESHOLD);
+            assertWithinUlp(double_log(d), double_log_verified(d), ULP_TOLERANCE);
         }
     }
 
@@ -235,9 +241,9 @@ public class TestLLVMDTrigs {
         Random random = new Random();
 
         // Test specific values
-        Asserts.assertLessThan(Math.abs(double_log10_verified(10.0d) - double_log10(10.0d)), PRECISION_THRESHOLD);
-        Asserts.assertLessThan(Math.abs(double_log10_verified(100.0d) - double_log10(100.0d)), PRECISION_THRESHOLD);
-        Asserts.assertLessThan(Math.abs(double_log10_verified(1.0d) - double_log10(1.0)), PRECISION_THRESHOLD);
+        assertWithinUlp(double_log10(10.0d), double_log10_verified(10.0d), ULP_TOLERANCE);
+        assertWithinUlp(double_log10(100.0d), double_log10_verified(100.0d), ULP_TOLERANCE);
+        assertWithinUlp(double_log10(1.0d), double_log10_verified(1.0d), ULP_TOLERANCE);
         Asserts.assertEquals(double_log10_verified(Double.NaN), double_log10(Double.NaN));
         Asserts.assertEquals(double_log10_verified(Double.POSITIVE_INFINITY), double_log10(Double.POSITIVE_INFINITY));
         Asserts.assertEquals(double_log10_verified(0.0d), double_log10(0.0d));
@@ -245,7 +251,7 @@ public class TestLLVMDTrigs {
         // Test random positive values
         for (int i = 0; i < 1000; i++) {
             double d = random.nextDouble() * 1000.0;
-            Asserts.assertLessThan(Math.abs(double_log10_verified(d) - double_log10(d)), PRECISION_THRESHOLD);
+            assertWithinUlp(double_log10(d), double_log10_verified(d), ULP_TOLERANCE);
         }
     }
 
@@ -253,9 +259,9 @@ public class TestLLVMDTrigs {
         Random random = new Random();
 
         // Test specific values
-        Asserts.assertLessThan(Math.abs(double_exp_verified(0.0d) - double_exp(0.0d)), PRECISION_THRESHOLD);
-        Asserts.assertLessThan(Math.abs(double_exp_verified(1.0d) - double_exp(1.0d)), PRECISION_THRESHOLD);
-        Asserts.assertLessThan(Math.abs(double_exp_verified(-1.0d) - double_exp(-1.0d)), PRECISION_THRESHOLD);
+        assertWithinUlp(double_exp(0.0d), double_exp_verified(0.0d), ULP_TOLERANCE);
+        assertWithinUlp(double_exp(1.0d), double_exp_verified(1.0d), ULP_TOLERANCE);
+        assertWithinUlp(double_exp(-1.0d), double_exp_verified(-1.0d), ULP_TOLERANCE);
         Asserts.assertEquals(double_exp_verified(Double.NaN), double_exp(Double.NaN));
         Asserts.assertEquals(double_exp_verified(Double.POSITIVE_INFINITY), double_exp(Double.POSITIVE_INFINITY));
         Asserts.assertEquals(double_exp_verified(Double.NEGATIVE_INFINITY), double_exp(Double.NEGATIVE_INFINITY));
@@ -263,7 +269,7 @@ public class TestLLVMDTrigs {
         // Test random values
         for (int i = 0; i < 100; i++) {
             double d = (random.nextDouble() - 0.5) * 10.0; // [-5, 5)
-            Asserts.assertLessThan(Math.abs(double_exp_verified(d) - double_exp(d)), PRECISION_THRESHOLD);
+            assertWithinUlp(double_exp(d), double_exp_verified(d), ULP_TOLERANCE);
         }
     }
 
@@ -271,9 +277,9 @@ public class TestLLVMDTrigs {
         Random random = new Random();
 
         // Test specific values
-        Asserts.assertLessThan(Math.abs(double_pow_verified(2.0d, 3.0d) - double_pow(2.0d, 3.0d)), PRECISION_THRESHOLD);
-        Asserts.assertLessThan(Math.abs(double_pow_verified(4.0d, 0.5d) - double_pow(4.0d, 0.5d)), PRECISION_THRESHOLD);
-        Asserts.assertLessThan(Math.abs(double_pow_verified(1.0d, 100.0d) - double_pow(1.0d, 100.0d)), PRECISION_THRESHOLD);
+        assertWithinUlp(double_pow(2.0d, 3.0d), double_pow_verified(2.0d, 3.0d), ULP_TOLERANCE);
+        assertWithinUlp(double_pow(4.0d, 0.5d), double_pow_verified(4.0d, 0.5d), ULP_TOLERANCE);
+        assertWithinUlp(double_pow(1.0d, 100.0d), double_pow_verified(1.0d, 100.0d), ULP_TOLERANCE);
 
         // Test edge cases
         Asserts.assertEquals(double_pow_verified(Double.NaN, 2.0d), double_pow(Double.NaN, 2.0d));
@@ -285,14 +291,14 @@ public class TestLLVMDTrigs {
         for (int i = 0; i < 1000; i++) {
             double base = random.nextDouble() * 10.0 + 0.1;
             double exponent = (random.nextDouble() - 0.5) * 10.0; // [-5, 5)
-            Asserts.assertLessThan(Math.abs(double_pow_verified(base, exponent) - double_pow(base, exponent)), PRECISION_THRESHOLD);
+            assertWithinUlp(double_pow(base, exponent), double_pow_verified(base, exponent), ULP_TOLERANCE);
         }
 
         // test negative base
         for (int i = 0; i < 100; i++) {
             double base = -random.nextDouble() * 10.0;
             int exponent = random.nextInt(10) - 5; // [-5, 5)
-            Asserts.assertLessThan(Math.abs(double_pow_verified(base, exponent) - double_pow(base, exponent)), PRECISION_THRESHOLD);
+            assertWithinUlp(double_pow(base, exponent), double_pow_verified(base, exponent), ULP_TOLERANCE);
         }
     }
 
