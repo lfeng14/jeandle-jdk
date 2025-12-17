@@ -63,6 +63,14 @@ public class TestLLVMDTrigs {
             testCosFunction();
         } else if (args[0].equals("testTan")) {
             testTanFunction();
+        } else if (args[0].equals("testLog")) {
+            testLogFunction();
+        } else if (args[0].equals("testLog10")) {
+            testLog10Function();
+        } else if (args[0].equals("testExp")) {
+            testExpFunction();
+        } else if (args[0].equals("testPow")) {
+            testPowFunction();
         } else {
             throw new IllegalArgumentException("Unsupported argument: " + args[0]);
         }
@@ -95,6 +103,42 @@ public class TestLLVMDTrigs {
         checker = new FileCheck(testDumpPath, TestLLVMDTrigs.class.getDeclaredMethod("double_tan", double.class), false);
         checker.check("define hotspotcc double @TestLLVMDTrigs_double_tan");
         checker.check("call double @llvm.tan.f64");
+
+        // Test log function with LLVM intrinsic
+        output = runTestProcess("testLog");
+        output.shouldHaveExitValue(0);
+
+        testDumpPath = System.getProperty("java.io.tmpdir") + "/test_log";
+        checker = new FileCheck(testDumpPath, TestLLVMDTrigs.class.getDeclaredMethod("double_log", double.class), false);
+        checker.check("define hotspotcc double @TestLLVMDTrigs_double_log");
+        checker.check("call double @llvm.log.f64");
+
+        // Test log10 function with LLVM intrinsic
+        output = runTestProcess("testLog10");
+        output.shouldHaveExitValue(0);
+
+        testDumpPath = System.getProperty("java.io.tmpdir") + "/test_log10";
+        checker = new FileCheck(testDumpPath, TestLLVMDTrigs.class.getDeclaredMethod("double_log10", double.class), false);
+        checker.check("define hotspotcc double @TestLLVMDTrigs_double_log10");
+        checker.check("call double @llvm.log10.f64");
+
+        // Test exp function with LLVM intrinsic
+        output = runTestProcess("testExp");
+        output.shouldHaveExitValue(0);
+
+        testDumpPath = System.getProperty("java.io.tmpdir") + "/test_exp";
+        checker = new FileCheck(testDumpPath, TestLLVMDTrigs.class.getDeclaredMethod("double_exp", double.class), false);
+        checker.check("define hotspotcc double @TestLLVMDTrigs_double_exp");
+        checker.check("call double @llvm.exp.f64");
+
+        // Test pow function with LLVM intrinsic
+        output = runTestProcess("testPow");
+        output.shouldHaveExitValue(0);
+
+        testDumpPath = System.getProperty("java.io.tmpdir") + "/test_pow";
+        checker = new FileCheck(testDumpPath, TestLLVMDTrigs.class.getDeclaredMethod("double_pow", double.class, double.class), false);
+        checker.check("define hotspotcc double @TestLLVMDTrigs_double_pow");
+        checker.check("call double @llvm.pow.f64");
     }
 
     private static OutputAnalyzer runTestProcess(String testType) throws Exception {
@@ -170,6 +214,88 @@ public class TestLLVMDTrigs {
         }
     }
 
+    private static void testLogFunction() {
+        Random random = new Random();
+
+        // Test specific values
+        Asserts.assertLessThan(Math.abs(double_log_verified(Math.E) - double_log(Math.E)), PRECISION_THRESHOLD);
+        Asserts.assertLessThan(Math.abs(double_log_verified(1.0d) - double_log(1.0d)), PRECISION_THRESHOLD);
+        Asserts.assertEquals(double_log_verified(Double.NaN), double_log(Double.NaN));
+        Asserts.assertEquals(double_log_verified(Double.POSITIVE_INFINITY), double_log(Double.POSITIVE_INFINITY));
+        Asserts.assertEquals(double_log_verified(0.0d), double_log(0.0d));
+
+        // Test random positive values
+        for (int i = 0; i < 1000; i++) {
+            double d = random.nextDouble() * 1000.0;
+            Asserts.assertLessThan(Math.abs(double_log_verified(d) - double_log(d)), PRECISION_THRESHOLD);
+        }
+    }
+
+    private static void testLog10Function() {
+        Random random = new Random();
+
+        // Test specific values
+        Asserts.assertLessThan(Math.abs(double_log10_verified(10.0d) - double_log10(10.0d)), PRECISION_THRESHOLD);
+        Asserts.assertLessThan(Math.abs(double_log10_verified(100.0d) - double_log10(100.0d)), PRECISION_THRESHOLD);
+        Asserts.assertLessThan(Math.abs(double_log10_verified(1.0d) - double_log10(1.0)), PRECISION_THRESHOLD);
+        Asserts.assertEquals(double_log10_verified(Double.NaN), double_log10(Double.NaN));
+        Asserts.assertEquals(double_log10_verified(Double.POSITIVE_INFINITY), double_log10(Double.POSITIVE_INFINITY));
+        Asserts.assertEquals(double_log10_verified(0.0d), double_log10(0.0d));
+
+        // Test random positive values
+        for (int i = 0; i < 1000; i++) {
+            double d = random.nextDouble() * 1000.0;
+            Asserts.assertLessThan(Math.abs(double_log10_verified(d) - double_log10(d)), PRECISION_THRESHOLD);
+        }
+    }
+
+    private static void testExpFunction() {
+        Random random = new Random();
+
+        // Test specific values
+        Asserts.assertLessThan(Math.abs(double_exp_verified(0.0d) - double_exp(0.0d)), PRECISION_THRESHOLD);
+        Asserts.assertLessThan(Math.abs(double_exp_verified(1.0d) - double_exp(1.0d)), PRECISION_THRESHOLD);
+        Asserts.assertLessThan(Math.abs(double_exp_verified(-1.0d) - double_exp(-1.0d)), PRECISION_THRESHOLD);
+        Asserts.assertEquals(double_exp_verified(Double.NaN), double_exp(Double.NaN));
+        Asserts.assertEquals(double_exp_verified(Double.POSITIVE_INFINITY), double_exp(Double.POSITIVE_INFINITY));
+        Asserts.assertEquals(double_exp_verified(Double.NEGATIVE_INFINITY), double_exp(Double.NEGATIVE_INFINITY));
+
+        // Test random values
+        for (int i = 0; i < 100; i++) {
+            double d = (random.nextDouble() - 0.5) * 10.0; // [-5, 5)
+            Asserts.assertLessThan(Math.abs(double_exp_verified(d) - double_exp(d)), PRECISION_THRESHOLD);
+        }
+    }
+
+    private static void testPowFunction() {
+        Random random = new Random();
+
+        // Test specific values
+        Asserts.assertLessThan(Math.abs(double_pow_verified(2.0d, 3.0d) - double_pow(2.0d, 3.0d)), PRECISION_THRESHOLD);
+        Asserts.assertLessThan(Math.abs(double_pow_verified(4.0d, 0.5d) - double_pow(4.0d, 0.5d)), PRECISION_THRESHOLD);
+        Asserts.assertLessThan(Math.abs(double_pow_verified(1.0d, 100.0d) - double_pow(1.0d, 100.0d)), PRECISION_THRESHOLD);
+
+        // Test edge cases
+        Asserts.assertEquals(double_pow_verified(Double.NaN, 2.0d), double_pow(Double.NaN, 2.0d));
+        Asserts.assertEquals(double_pow_verified(2.0d, Double.NaN), double_pow(2.0d, Double.NaN));
+        Asserts.assertEquals(double_pow_verified(Double.POSITIVE_INFINITY, 2.0d), double_pow(Double.POSITIVE_INFINITY, 2.0d));
+        Asserts.assertEquals(double_pow_verified(2.0d, Double.POSITIVE_INFINITY), double_pow(2.0d, Double.POSITIVE_INFINITY));
+
+        // Test random values
+        for (int i = 0; i < 1000; i++) {
+            double base = random.nextDouble() * 10.0 + 0.1;
+            double exponent = (random.nextDouble() - 0.5) * 10.0; // [-5, 5)
+            Asserts.assertLessThan(Math.abs(double_pow_verified(base, exponent) - double_pow(base, exponent)), PRECISION_THRESHOLD);
+        }
+
+        // test negative base
+        for (int i = 0; i < 100; i++) {
+            double base = -random.nextDouble() * 10.0;
+            int exponent = random.nextInt(10) - 5; // [-5, 5)
+            Asserts.assertLessThan(Math.abs(double_pow_verified(base, exponent) - double_pow(base, exponent)), PRECISION_THRESHOLD);
+        }
+    }
+
     public static double double_sin(double a) {
         return Math.sin(a);
     }
@@ -192,5 +318,37 @@ public class TestLLVMDTrigs {
 
     public static double double_tan_verified(double a) {
         return StrictMath.tan(a);
+    }
+
+    public static double double_log(double a) {
+        return Math.log(a);
+    }
+
+    public static double double_log_verified(double a) {
+        return StrictMath.log(a);
+    }
+
+    public static double double_log10(double a) {
+        return Math.log10(a);
+    }
+
+    public static double double_log10_verified(double a) {
+        return StrictMath.log10(a);
+    }
+
+    public static double double_exp(double a) {
+        return Math.exp(a);
+    }
+
+    public static double double_exp_verified(double a) {
+        return StrictMath.exp(a);
+    }
+
+    public static double double_pow(double a, double b) {
+        return Math.pow(a, b);
+    }
+
+    public static double double_pow_verified(double a, double b) {
+        return StrictMath.pow(a, b);
     }
 }
