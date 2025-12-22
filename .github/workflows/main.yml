@@ -48,8 +48,8 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       linux-x64: true # We always run test on x86
-      linux-aarch64: ${{ github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'AArch64') || github.event_name == 'repository_dispatch' && github.event.client_payload.linux_aarch64 }}
-      linux-riscv64: ${{ github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'RISC-V') || github.event_name == 'repository_dispatch' && github.event.client_payload.linux_riscv64 }}
+      linux-aarch64: ${{ (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'AArch64')) || (github.event_name == 'repository_dispatch' && contains(github.event.client_payload.labels, 'AArch64')) }}
+      linux-riscv64: ${{ (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'RISC-V')) || (github.event_name == 'repository_dispatch' && contains(github.event.client_payload.labels, 'RISC-V')) }}
 
     steps:
       - name: 'Checkout the scripts'
