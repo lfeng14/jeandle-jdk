@@ -29,8 +29,6 @@ name: 'OpenJDK GHA Sanity Checks'
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled]
-    branches:
-      - 'main'
   repository_dispatch:
     types: ["dispatch-from-llvm"]
 concurrency:
