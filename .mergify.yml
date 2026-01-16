@@ -1,20 +1,12 @@
 merge_protections:
   - name: Require a review from a maintainer.
-    if:
-      - base = main
     success_conditions:
       - approved-reviews-by = @Maintainer
   - name: Pull request title format.
-    if:
-      - base = main
     success_conditions:
       - "title ~=
         ^(fix|feat|docs|style|refactor|enhance|test|build|ci|chore|revert):"
   - name: Actions status check for AArch64
-    if:
-      - and:
-          - label = AArch64
-          - base = main
     success_conditions:
       - and:
           - check-success = linux-aarch64 / test (lib-test/tier1)
