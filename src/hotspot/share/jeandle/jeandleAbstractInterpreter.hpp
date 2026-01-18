@@ -279,6 +279,9 @@ class JeandleAbstractInterpreter : public StackObj {
   // Contains all blocks to interpret. Sorted by reverse-post-order.
   llvm::SmallVector<JeandleBasicBlock*> _work_list;
 
+  // Object & Lock for synchronized method
+  llvm::SmallVector<llvm::Value*, 2> _sync_lock; // 0: object 1: lock
+
   void initialize_VM_state();
   void interpret();
   void interpret_block(JeandleBasicBlock* block);
@@ -352,6 +355,7 @@ class JeandleAbstractInterpreter : public StackObj {
   void do_array_store(BasicType basic_type);
   llvm::Value* do_array_load_inner(BasicType basic_type, llvm::Type* load_type);
   void do_array_store_inner(BasicType basic_type, llvm::Type* store_type, llvm::Value* value);
+  void array_store_check(llvm::Value* value, llvm::Value* array_ref);
   llvm::Value* compute_array_element_address(BasicType basic_type, llvm::Type* type);
 
   typedef struct {
@@ -371,6 +375,8 @@ class JeandleAbstractInterpreter : public StackObj {
   // Implementation of _new
   void do_new();
 
+  void shared_lock(llvm::Value* obj, llvm::Value* lock = nullptr);
+  void shared_unlock(llvm::Value* obj, llvm::Value* lock);
   void monitorenter();
   void monitorexit();
 
@@ -379,6 +385,8 @@ class JeandleAbstractInterpreter : public StackObj {
   void boundary_check(llvm::Value* array_oop, llvm::Value* index);
 
   void uncommon_trap(Deoptimization::DeoptReason, Deoptimization::DeoptAction, llvm::BasicBlock* insert_block = nullptr);
+
+  void return_current(llvm::Value* value);
 };
 
 #endif // SHARE_JEANDLE_ABSTRACT_INTERPRETER_HPP
