@@ -1,22 +1,43 @@
-############################################################################
+# ProblemList for Jeandle compiler - jdk tests
+# Generated from test failures
+
+# java_foreign
+java/foreign/StdLibTest.java                                         generic-all
+java/foreign/TestHandshake.java                                      generic-all
+java/foreign/TestMismatch.java                                       generic-all
+java/foreign/TestSegmentOffset.java                                  generic-all
+
 # java_lang_Character
+java/lang/Character/CharPropTest.java                                generic-all
+java/lang/Character/CharacterName.java                               generic-all
+java/lang/Character/CheckProp.java                                   generic-all
+java/lang/Character/CheckScript.java                                 generic-all
 java/lang/Character/CheckUnicode.java                                generic-all
+java/lang/Character/CheckUnicode.java                                generic-all
+java/lang/Character/TestEmojiProperties.java                         generic-all
+java/lang/Character/UnicodeCasingTest.java                           generic-all
 java/lang/Character/UnicodeCasingTest.java                           generic-all
 
 # java_lang_Math
 java/lang/Math/WorstCaseTests.java                                   generic-all
 
-# java_lang_ModuleTests
-java/lang/ModuleTests/AnnotationsTest.java                           generic-all
-
 # java_lang_Object
 java/lang/Object/FinalizationOption.java                             generic-all
+java/lang/Object/FinalizationOption.java                             generic-all
+
+# java_lang_ProcessHandle
+java/lang/ProcessHandle/PermissionTest.java                          generic-all
+java/lang/ProcessHandle/PermissionTest.java                          generic-all
 
 # java_lang_ScopedValue
 java/lang/ScopedValue/StressStackOverflow.java#default                      generic-all
+java/lang/ScopedValue/StressStackOverflow.java#default                      generic-all
+java/lang/ScopedValue/StressStackOverflow.java#no-TieredCompilation         generic-all
 java/lang/ScopedValue/StressStackOverflow.java#no-TieredCompilation         generic-all
 
 # java_lang_StackWalker
+java/lang/StackWalker/LocalsAndOperands.java#id0                     generic-all
+java/lang/StackWalker/LocalsAndOperands.java#id1                     generic-all
 java/lang/StackWalker/LocalsAndOperands.java#id1                     generic-all
 
 # java_lang_StrictMath
@@ -25,25 +46,39 @@ java/lang/StrictMath/ExhaustingTests.java                            generic-all
 java/lang/StrictMath/TrigTests.java                                  generic-all
 
 # java_lang_String
-java/lang/String/Encodings.java                                      generic-all
+java/lang/String/LiteralReplace.java                                 generic-all
 java/lang/String/SpecialCasingTest.java                              generic-all
+java/lang/String/SpecialCasingTest.java                              generic-all
+java/lang/String/ToLowerCase.java                                    generic-all
+java/lang/String/UnicodeCasingTest.java                              generic-all
 java/lang/String/UnicodeCasingTest.java                              generic-all
 
-# java_lang_StringBuffer
-java/lang/StringBuffer/TestSynchronization.java                      generic-all
-
 # java_lang_constant
+java/lang/constant/MethodTypeDescTest.java                           generic-all
 java/lang/constant/MethodTypeDescTest.java                           generic-all
 
 # java_lang_invoke
 java/lang/invoke/TestLambdaFormCustomization.java                    generic-all
+java/lang/invoke/TestLambdaFormCustomization.java                    generic-all
+
+# java_lang_invoke_VarHandles
+java/lang/invoke/VarHandles/VarHandleTestByteArrayAsChar.java           generic-all
+java/lang/invoke/VarHandles/VarHandleTestByteArrayAsDouble.java         generic-all
+java/lang/invoke/VarHandles/VarHandleTestByteArrayAsFloat.java          generic-all
+java/lang/invoke/VarHandles/VarHandleTestByteArrayAsInt.java            generic-all
+java/lang/invoke/VarHandles/VarHandleTestByteArrayAsLong.java           generic-all
+java/lang/invoke/VarHandles/VarHandleTestByteArrayAsShort.java          generic-all
 
 # java_lang_ref
 java/lang/ref/Basic.java                                             generic-all
+java/lang/ref/Basic.java                                             generic-all
 java/lang/ref/FinalizeOverride.java                                  generic-all
+java/lang/ref/FinalizeOverride.java                                  generic-all
+java/lang/ref/FinalizerHistogramTest.java                            generic-all
 java/lang/ref/FinalizerHistogramTest.java                            generic-all
 
 # java_lang_reflect
+java/lang/reflect/IllegalArgumentsTest.java                          generic-all
 java/lang/reflect/IllegalArgumentsTest.java                          generic-all
 
 # java_lang_reflect_PublicMethods
@@ -52,19 +87,39 @@ java/lang/reflect/PublicMethods/PublicMethodsTest.java               generic-all
 # java_math_BigDecimal
 java/math/BigDecimal/DoubleFloatValueTests.java                      generic-all
 
+# java_math_BigInteger_largeMemory
+java/math/BigInteger/largeMemory/SymmetricRangeTests.java            generic-all
+
 # java_nio_Buffer
+java/nio/Buffer/ByteBufferViews.java                                 generic-all
+java/nio/Buffer/DirectBufferAllocTest.java                           generic-all
 java/nio/Buffer/DirectBufferAllocTest.java                           generic-all
 
-# java_util_Collection
-java/util/Collection/MOAT.java                                       generic-all
+# java_util_Base64
+java/util/Base64/TestBase64.java                                     generic-all
+
+# java_util_BitSet_stream
+java/util/BitSet/stream/BitSetStreamTest.java                        generic-all
 
 # java_util_Properties
 java/util/Properties/ConcurrentLoadAndStoreXML.java                  generic-all
 
+# java_util_Random
+java/util/Random/RandomExponentialTest.java                          generic-all
+java/util/Random/RandomTest.java                                     generic-all
+
+# java_util_ResourceBundle_UTF8Properties
+java/util/ResourceBundle/UTF8Properties/CodePointTest.java           generic-all
+
+# java_util_Spliterator
+java/util/Spliterator/SpliteratorTraversingAndSplittingTest.java         generic-all
+
 # java_util_WeakHashMap
+java/util/WeakHashMap/GCDuringIteration.java                         generic-all
 java/util/WeakHashMap/GCDuringIteration.java                         generic-all
 
 # java_util_concurrent_ArrayBlockingQueue
+java/util/concurrent/ArrayBlockingQueue/WhiteBox.java                generic-all
 java/util/concurrent/ArrayBlockingQueue/WhiteBox.java                generic-all
 
 # java_util_concurrent_Semaphore
@@ -75,83 +130,138 @@ java/util/concurrent/forkjoin/Integrate.java                         generic-all
 
 # java_util_concurrent_locks_Lock
 java/util/concurrent/locks/Lock/TimedAcquireLeak.java                generic-all
+java/util/concurrent/locks/Lock/TimedAcquireLeak.java                generic-all
+
+# java_util_concurrent_tck
+java/util/concurrent/tck/JSR166TestCase.java#security-manager         generic-all
 
 # java_util_logging
-java/util/logging/LoggingDeadlock3.java                              generic-all
+java/util/logging/TestLogConfigurationDeadLock.java                  generic-all
+java/util/logging/TestLogConfigurationDeadLockWithConf.java          generic-all
+java/util/logging/TestLogConfigurationDeadLockWithConf.java          generic-all
 java/util/logging/TestLoggerBundleSync.java                          generic-all
 
-# java_util_logging_LogManager_Configuration
-java/util/logging/LogManager/Configuration/TestConfigurationLock.java         generic-all
+# java_util_logging_HigherResolutionTimeStamps
+java/util/logging/HigherResolutionTimeStamps/LogRecordWithNanos.java         generic-all
+
+# java_util_regex
+java/util/regex/RegExTest.java                                       generic-all
+
+# java_util_stream_boottest_java.base_java_util_stream
+java/util/stream/boottest/java.base/java/util/stream/NodeTest.java                        generic-all
+java/util/stream/boottest/java.base/java/util/stream/SpinedBufferIntegerTest.java         generic-all
+
+# java_util_stream_test_org_openjdk_tests_java_util
+java/util/stream/test/org/openjdk/tests/java/util/SplittableRandomTest.java         generic-all
 
 # java_util_stream_test_org_openjdk_tests_java_util_stream
-java/util/stream/test/org/openjdk/tests/java/util/stream/CollectorsTest.java            generic-all
-java/util/stream/test/org/openjdk/tests/java/util/stream/FlatMapOpTest.java             generic-all
-java/util/stream/test/org/openjdk/tests/java/util/stream/SliceOpTest.java               generic-all
-java/util/stream/test/org/openjdk/tests/java/util/stream/StreamBuilderTest.java         generic-all
-java/util/stream/test/org/openjdk/tests/java/util/stream/StreamLinkTest.java            generic-all
-java/util/stream/test/org/openjdk/tests/java/util/stream/WhileOpTest.java               generic-all
-java/util/stream/test/org/openjdk/tests/java/util/stream/mapMultiOpTest.java            generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/CollectorsTest.java                        generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/CollectorsTest.java                        generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/DistinctOpTest.java                        generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/FlatMapOpTest.java                         generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/FlatMapOpTest.java                         generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/InfiniteStreamWithLimitOpTest.java         generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/InfiniteStreamWithLimitOpTest.java         generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/MapOpTest.java                             generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/MapOpTest.java                             generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/SliceOpTest.java                           generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/SliceOpTest.java                           generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/StreamLinkTest.java                        generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/StreamLinkTest.java                        generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/StreamSpliteratorTest.java                 generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/StreamSpliteratorTest.java                 generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/ToArrayOpTest.java                         generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/WhileOpTest.java                           generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/WhileOpTest.java                           generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/mapMultiOpTest.java                        generic-all
+java/util/stream/test/org/openjdk/tests/java/util/stream/mapMultiOpTest.java                        generic-all
 
 # jdk_classfile
+jdk/classfile/CorpusTest.java                                        generic-all
 jdk/classfile/CorpusTest.java                                        generic-all
 
 # jdk_internal_jimage
 jdk/internal/jimage/JImageOpenTest.java                              generic-all
+jdk/internal/jimage/JImageOpenTest.java                              generic-all
 
 # jdk_internal_loader_ClassLoaderValue
+jdk/internal/loader/ClassLoaderValue/ClassLoaderValueTest.java         generic-all
 jdk/internal/loader/ClassLoaderValue/ClassLoaderValueTest.java         generic-all
 
 # jdk_internal_math_FloatingDecimal
 jdk/internal/math/FloatingDecimal/TestFloatingDecimal.java           generic-all
 
 # jdk_internal_math_ToDecimal
+jdk/internal/math/ToDecimal/DoubleToDecimalTest.java                 generic-all
+jdk/internal/math/ToDecimal/DoubleToDecimalTest.java                 generic-all
 jdk/internal/math/ToDecimal/FloatToDecimalTest.java                  generic-all
 
 # jdk_internal_reflect_CallerSensitive
 jdk/internal/reflect/CallerSensitive/CallerSensitiveFinder.java         generic-all
+jdk/internal/reflect/CallerSensitive/CallerSensitiveFinder.java         generic-all
+jdk/internal/reflect/CallerSensitive/CheckCSMs.java                     generic-all
+jdk/internal/reflect/CallerSensitive/CheckCSMs.java                     generic-all
+jdk/internal/reflect/CallerSensitive/CheckCSMs.java                     generic-all
 jdk/internal/reflect/CallerSensitive/CheckCSMs.java                     generic-all
 
-# jdk_javadoc_doclet_AuthorDD
-jdk/javadoc/doclet/AuthorDD/AuthorDD.java                            generic-all
-
-# jdk_javadoc_doclet_dupThrowsTags
-jdk/javadoc/doclet/dupThrowsTags/TestDupThrowsTags.java              generic-all
-
-# jdk_javadoc_doclet_testBaseClass
-jdk/javadoc/doclet/testBaseClass/TestBaseClass.java                  generic-all
-
-# jdk_javadoc_doclet_testExceptionInheritance
-jdk/javadoc/doclet/testExceptionInheritance/TestExceptionInheritance.java         generic-all
-
-# jdk_javadoc_doclet_testGroupOption
-jdk/javadoc/doclet/testGroupOption/TestGroupOption.java              generic-all
-
-# jdk_javadoc_doclet_testHtmlLandmarkRegions
-jdk/javadoc/doclet/testHtmlLandmarkRegions/TestHtmlLandmarkRegions.java         generic-all
+# jdk_internal_shellsupport_doc
+jdk/internal/shellsupport/doc/JavadocHelperTest.java                 generic-all
+jdk/internal/shellsupport/doc/JavadocHelperTest.java                 generic-all
 
 # jdk_jfr_event_gc_configuration
+jdk/jfr/event/gc/configuration/TestGCConfigurationEvent.java         generic-all
 jdk/jfr/event/gc/configuration/TestGCConfigurationEvent.java         generic-all
 
 # jdk_jshell
 jdk/jshell/AnalyzeSnippetTest.java                                   generic-all
 jdk/jshell/ClassMembersTest.java                                     generic-all
+jdk/jshell/ClassMembersTest.java                                     generic-all
+jdk/jshell/ClassesTest.java                                          generic-all
 jdk/jshell/CommandCompletionTest.java                                generic-all
+jdk/jshell/CommandCompletionTest.java                                generic-all
+jdk/jshell/CompletenessTest.java                                     generic-all
 jdk/jshell/CustomInputToolBuilder.java                               generic-all
+jdk/jshell/CustomInputToolBuilder.java                               generic-all
+jdk/jshell/ErrorTranslationTest.java                                 generic-all
+jdk/jshell/ExceptionsTest.java                                       generic-all
+jdk/jshell/ForwardReferenceImportTest.java                           generic-all
+jdk/jshell/ForwardReferenceTest.java                                 generic-all
 jdk/jshell/HistoryTest.java                                          generic-all
+jdk/jshell/HistoryTest.java                                          generic-all
+jdk/jshell/HistoryUITest.java                                        generic-all
+jdk/jshell/JavadocTest.java                                          generic-all
+jdk/jshell/MultipleDocumentationTest.java                            generic-all
+jdk/jshell/PasteAndMeasurementsUITest.java                           generic-all
+jdk/jshell/SourceLevelTest.java                                      generic-all
 jdk/jshell/SourceLevelTest.java                                      generic-all
 jdk/jshell/StartOptionTest.java                                      generic-all
+jdk/jshell/StartOptionTest.java                                      generic-all
 jdk/jshell/ToolCommandOptionTest.java                                generic-all
+jdk/jshell/ToolCommandOptionTest.java                                generic-all
+jdk/jshell/ToolEnableNativeAccessTest.java                           generic-all
+jdk/jshell/ToolEnablePreviewTest.java                                generic-all
 jdk/jshell/ToolEnablePreviewTest.java                                generic-all
 jdk/jshell/ToolFormatTest.java                                       generic-all
+jdk/jshell/ToolFormatTest.java                                       generic-all
 jdk/jshell/ToolLocalSimpleTest.java                                  generic-all
-jdk/jshell/ToolMultilineSnippetHistoryTest.java                      generic-all
+jdk/jshell/ToolLocalSimpleTest.java                                  generic-all
+jdk/jshell/ToolProviderTest.java                                     generic-all
 jdk/jshell/ToolProviderTest.java                                     generic-all
 jdk/jshell/ToolRetainTest.java                                       generic-all
+jdk/jshell/ToolRetainTest.java                                       generic-all
+jdk/jshell/ToolShiftTabTest.java                                     generic-all
 jdk/jshell/ToolShiftTabTest.java                                     generic-all
 jdk/jshell/ToolSimpleTest.java                                       generic-all
+jdk/jshell/ToolSimpleTest.java                                       generic-all
+jdk/jshell/ToolTabSnippetTest.java                                   generic-all
 jdk/jshell/ToolTabSnippetTest.java                                   generic-all
 jdk/jshell/ToolingTest.java                                          generic-all
+jdk/jshell/ToolingTest.java                                          generic-all
 jdk/jshell/TypeNameTest.java                                         generic-all
-jdk/jshell/UserExecutionControlTest.java                             generic-all
+jdk/jshell/TypeNameTest.java                                         generic-all
+jdk/jshell/UndefinedClassTest.java                                   generic-all
 jdk/jshell/WrapperTest.java                                          generic-all
-############################################################################
+jdk/jshell/WrapperTest.java                                          generic-all
+
+# jdk_jshell_T8146368
+jdk/jshell/T8146368/JShellToolTest8146368.java                       generic-all
