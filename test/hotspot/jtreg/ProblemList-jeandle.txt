@@ -1,39 +1,60 @@
-############################################################################
+# ProblemList for Jeandle compiler - hotspot/jtreg tests
+# Generated from test failures
+
 # com_sun_crypto_provider_Cipher_ChaCha20_unittest
 com/sun/crypto/provider/Cipher/ChaCha20/unittest/Poly1305UnitTestDriver.java#id3         generic-all
 com/sun/crypto/provider/Cipher/ChaCha20/unittest/Poly1305UnitTestDriver.java#id4         generic-all
 
 # compiler_arraycopy
 compiler/arraycopy/TestArrayCopyNoInitDeopt.java                     generic-all
+compiler/arraycopy/TestArrayCopyNoInitDeopt.java                     generic-all
 
 # compiler_c2
 compiler/c2/PolynomialRoot.java                                      generic-all
 compiler/c2/Test6910605_1.java                                       generic-all
+compiler/c2/Test6910605_1.java                                       generic-all
+compiler/c2/Test6910605_2.java                                       generic-all
 compiler/c2/Test6910605_2.java                                       generic-all
 compiler/c2/TestShiftRightAndAccumulate.java#id0                     generic-all
+compiler/c2/TestShiftRightAndAccumulate.java#id0                     generic-all
 compiler/c2/TestShiftRightAndAccumulate.java#id1                     generic-all
+compiler/c2/TestShiftRightAndAccumulate.java#id1                     generic-all
+compiler/c2/TestUnsignedByteCompare1.java                            generic-all
 compiler/c2/TestUnsignedByteCompare1.java                            generic-all
 
 # compiler_codecache
 compiler/codecache/CodeCacheFullCountTest.java                       generic-all
+compiler/codecache/CodeCacheFullCountTest.java                       generic-all
+compiler/codecache/TestStressCodeBuffers.java                        generic-all
 
 # compiler_codegen
 compiler/codegen/BMI2.java                                           generic-all
+compiler/codegen/BMI2.java                                           generic-all
+compiler/codegen/TestTrichotomyExpressions.java                      generic-all
+compiler/codegen/TestTrichotomyExpressions.java                      generic-all
 
 # compiler_escapeAnalysis
+compiler/escapeAnalysis/Test6775880.java                             generic-all
 compiler/escapeAnalysis/Test6775880.java                             generic-all
 
 # compiler_exceptions
 compiler/exceptions/OptimizeImplicitExceptions.java                  generic-all
+compiler/exceptions/OptimizeImplicitExceptions.java                  generic-all
 
 # compiler_interpreter
+compiler/interpreter/Test6833129.java                                generic-all
 compiler/interpreter/Test6833129.java                                generic-all
 
 # compiler_intrinsics
 compiler/intrinsics/IntrinsicAvailableTest.java                      generic-all
+compiler/intrinsics/IntrinsicAvailableTest.java                      generic-all
+compiler/intrinsics/IntrinsicDisabledTest.java                       generic-all
 compiler/intrinsics/IntrinsicDisabledTest.java                       generic-all
 compiler/intrinsics/TestCheckIndex.java                              generic-all
+compiler/intrinsics/TestCheckIndex.java                              generic-all
 compiler/intrinsics/TestLongUnsignedDivMod.java                      generic-all
+compiler/intrinsics/TestLongUnsignedDivMod.java                      generic-all
+compiler/intrinsics/TestRotate.java                                  generic-all
 compiler/intrinsics/TestRotate.java                                  generic-all
 
 # compiler_intrinsics_float16
@@ -41,41 +62,72 @@ compiler/intrinsics/float16/Binary16Conversion.java                  generic-all
 
 # compiler_intrinsics_klass
 compiler/intrinsics/klass/CastNullCheckDroppingsTest.java            generic-all
+compiler/intrinsics/klass/CastNullCheckDroppingsTest.java            generic-all
+
+# compiler_jeandle_bytecodeTranslate
+compiler/jeandle/bytecodeTranslate/TestOopHandle.java                generic-all
 
 # compiler_jsr292_NonInlinedCall
+compiler/jsr292/NonInlinedCall/InvokeTest.java                       generic-all
 compiler/jsr292/NonInlinedCall/InvokeTest.java                       generic-all
 
 # compiler_jvmci_compilerToVM
 compiler/jvmci/compilerToVM/AllocateCompileIdTest.java                generic-all
+compiler/jvmci/compilerToVM/AllocateCompileIdTest.java                generic-all
 compiler/jvmci/compilerToVM/HasCompiledCodeForOSRTest.java            generic-all
+compiler/jvmci/compilerToVM/HasCompiledCodeForOSRTest.java            generic-all
+compiler/jvmci/compilerToVM/MaterializeVirtualObjectTest.java         generic-all
 compiler/jvmci/compilerToVM/MaterializeVirtualObjectTest.java         generic-all
 
 # compiler_loopopts
+compiler/loopopts/LoopUnswitchingBadNodeBudget.java                                           generic-all
 compiler/loopopts/TestCanonicalLoopEntryOpaqueOrder.java                                      generic-all
 compiler/loopopts/TestCastIIMakesMainLoopPhiDead2.java                                        generic-all
+compiler/loopopts/TestCastIIMakesMainLoopPhiDead2.java                                        generic-all
+compiler/loopopts/TestDivZeroCheckControl.java#id0                                            generic-all
 compiler/loopopts/TestDivZeroCheckControl.java#id0                                            generic-all
 compiler/loopopts/TestPartialPeelAtUnsignedTestsNegativeLimit.java#Xbatch                     generic-all
+compiler/loopopts/TestPartialPeelAtUnsignedTestsNegativeLimit.java#Xbatch                     generic-all
+compiler/loopopts/TestPartialPeelAtUnsignedTestsNegativeLimit.java#Xcomp-compile-test         generic-all
 compiler/loopopts/TestPartialPeelAtUnsignedTestsNegativeLimit.java#Xcomp-compile-test         generic-all
 compiler/loopopts/TestPartialPeelAtUnsignedTestsNegativeLimit.java#Xcomp-run-inline           generic-all
+compiler/loopopts/TestPartialPeelAtUnsignedTestsNegativeLimit.java#Xcomp-run-inline           generic-all
+compiler/loopopts/TestPhiInSkeletonPredicateExpression.java                                   generic-all
 compiler/loopopts/TestRemoveEmptyLoop.java                                                    generic-all
+compiler/loopopts/TestRemoveEmptyLoop.java                                                    generic-all
+compiler/loopopts/UseCountedLoopSafepointsTest.java                                           generic-all
 compiler/loopopts/UseCountedLoopSafepointsTest.java                                           generic-all
 
 # compiler_profiling
 compiler/profiling/TestTypeProfiling.java                            generic-all
+compiler/profiling/TestTypeProfiling.java                            generic-all
 
 # compiler_profiling_spectrapredefineclass_classloaders
 compiler/profiling/spectrapredefineclass_classloaders/Launcher.java         generic-all
+compiler/profiling/spectrapredefineclass_classloaders/Launcher.java         generic-all
+
+# compiler_runtime
+compiler/runtime/TestConstantDynamic.java                            generic-all
+compiler/runtime/TestConstantDynamic.java                            generic-all
 
 # compiler_uncommontrap
 compiler/uncommontrap/Decompile.java                                 generic-all
+compiler/uncommontrap/Decompile.java                                 generic-all
+compiler/uncommontrap/Test8009761.java                               generic-all
 compiler/uncommontrap/Test8009761.java                               generic-all
 compiler/uncommontrap/TestDeoptOOM.java#id0                          generic-all
+compiler/uncommontrap/TestDeoptOOM.java#id0                          generic-all
+compiler/uncommontrap/TestStackBangMonitorOwned.java                 generic-all
 compiler/uncommontrap/TestStackBangMonitorOwned.java                 generic-all
 compiler/uncommontrap/TestStackBangRbp.java                          generic-all
+compiler/uncommontrap/TestStackBangRbp.java                          generic-all
+compiler/uncommontrap/TestUnstableIfTrap.java                        generic-all
 compiler/uncommontrap/TestUnstableIfTrap.java                        generic-all
 
 # compiler_unsafe
 compiler/unsafe/UnsafeGetConstantField.java                          generic-all
+compiler/unsafe/UnsafeGetConstantField.java                          generic-all
+compiler/unsafe/UnsafeGetStableArrayElement.java                     generic-all
 compiler/unsafe/UnsafeGetStableArrayElement.java                     generic-all
 
 # compiler_vectorization_runner
@@ -83,50 +135,92 @@ compiler/vectorization/runner/BasicDoubleOpTest.java                 generic-all
 
 # gc
 gc/TestJNICriticalStressTest.java#id2                                generic-all
+gc/TestJNICriticalStressTest.java#id2                                generic-all
 
 # gc_arguments
 gc/arguments/TestDisableDefaultGC.java                               generic-all
+gc/arguments/TestDisableDefaultGC.java                               generic-all
+gc/arguments/TestUseCompressedOopsFlagsWithUlimit.java               generic-all
 gc/arguments/TestUseCompressedOopsFlagsWithUlimit.java               generic-all
 
 # gc_metaspace
 gc/metaspace/TestMetaspacePerfCounters.java#Serial-64                generic-all
+gc/metaspace/TestMetaspacePerfCounters.java#Serial-64                generic-all
+gc/metaspace/TestPerfCountersAndMemoryPools.java#id0                 generic-all
 gc/metaspace/TestPerfCountersAndMemoryPools.java#id0                 generic-all
 
 # runtime_Metaspace
 runtime/Metaspace/PrintMetaspaceDcmd.java#test-64bit-ccs                 generic-all
+runtime/Metaspace/PrintMetaspaceDcmd.java#test-64bit-ccs                 generic-all
+runtime/Metaspace/PrintMetaspaceDcmd.java#test-64bit-ccs-guarded         generic-all
 runtime/Metaspace/PrintMetaspaceDcmd.java#test-64bit-ccs-guarded         generic-all
 
 # runtime_Thread
 runtime/Thread/AsyncExceptionTest.java                               generic-all
+runtime/Thread/AsyncExceptionTest.java                               generic-all
 runtime/Thread/InterruptAtExit.java                                  generic-all
 runtime/Thread/SetNameAtExit.java                                    generic-all
+runtime/Thread/SetNameAtExit.java                                    generic-all
+runtime/Thread/StopAtExit.java                                       generic-all
 runtime/Thread/StopAtExit.java                                       generic-all
 runtime/Thread/SuspendAtExit.java                                    generic-all
+runtime/Thread/SuspendAtExit.java                                    generic-all
+
+# runtime_Unsafe
+runtime/Unsafe/InternalErrorTest.java                                generic-all
+runtime/Unsafe/InternalErrorTest.java                                generic-all
+
+# runtime_exceptionMsgs_ArrayIndexOutOfBoundsException
+runtime/exceptionMsgs/ArrayIndexOutOfBoundsException/ArrayIndexOutOfBoundsExceptionTest.java#id1         generic-all
+
+# runtime_jni_FastGetField
+runtime/jni/FastGetField/FastGetField.java                           generic-all
 
 # serviceability_dcmd_gc
+serviceability/dcmd/gc/FinalizerInfoTest.java                        generic-all
 serviceability/dcmd/gc/FinalizerInfoTest.java                        generic-all
 
 # serviceability_jvmti_GetLocalVariable
 serviceability/jvmti/GetLocalVariable/GetLocalVars.java              generic-all
+serviceability/jvmti/GetLocalVariable/GetLocalVars.java              generic-all
 
 # serviceability_jvmti_Heap
+serviceability/jvmti/Heap/IterateHeapWithEscapeAnalysisEnabled.java         generic-all
 serviceability/jvmti/Heap/IterateHeapWithEscapeAnalysisEnabled.java         generic-all
 
 # serviceability_jvmti_HeapMonitor_MyPackage
 serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorEventOnOffTest.java           generic-all
+serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorEventOnOffTest.java           generic-all
+serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorGCParallelTest.java           generic-all
 serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorGCParallelTest.java           generic-all
 serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorGCSerialTest.java             generic-all
+serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorGCSerialTest.java             generic-all
+serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorGCTest.java                   generic-all
 serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorGCTest.java                   generic-all
 serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorStatIntervalTest.java         generic-all
+serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorStatIntervalTest.java         generic-all
+serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorTest.java                     generic-all
 serviceability/jvmti/HeapMonitor/MyPackage/HeapMonitorTest.java                     generic-all
 
 # serviceability_jvmti_vthread_VThreadNotifyFramePopTest
 serviceability/jvmti/vthread/VThreadNotifyFramePopTest/VThreadNotifyFramePopTest.java#default         generic-all
+serviceability/jvmti/vthread/VThreadNotifyFramePopTest/VThreadNotifyFramePopTest.java#default         generic-all
 
 # serviceability_sa
+serviceability/sa/ClhsdbAttach.java                                  generic-all
+serviceability/sa/ClhsdbAttachDifferentJVMs.java                     generic-all
+serviceability/sa/ClhsdbClasses.java                                 generic-all
 serviceability/sa/ClhsdbDumpheap.java                                generic-all
+serviceability/sa/ClhsdbFlags.java                                   generic-all
+serviceability/sa/ClhsdbJdis.java                                    generic-all
+serviceability/sa/ClhsdbPrintAs.java                                 generic-all
+serviceability/sa/ClhsdbSymbol.java                                  generic-all
+serviceability/sa/ClhsdbThread.java                                  generic-all
+serviceability/sa/ClhsdbThreadContext.java                           generic-all
+serviceability/sa/TestClassDump.java                                 generic-all
+serviceability/sa/TestJhsdbJstackLock.java                           generic-all
 serviceability/sa/TestObjectAlignment.java                           generic-all
+serviceability/sa/TestSysProps.java                                  generic-all
 
 # serviceability_sa_sadebugd
-serviceability/sa/sadebugd/DebugdConnectTest.java                    generic-all
-############################################################################
+serviceability/sa/sadebugd/SADebugDTest.java                         generic-all
