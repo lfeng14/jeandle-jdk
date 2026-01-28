@@ -1,9 +1,20 @@
-############################################################################
+# ProblemList for Jeandle compiler - langtools tests
+# Generated from test failures
+
 # tools_javac_annotations_neg_8022765
 tools/javac/annotations/neg/8022765/VerifyErroneousAnnotationsAttributed.java         generic-all
 
+# tools_javac_api
+tools/javac/api/TestClientCodeWrapper.java                           generic-all
+
 # tools_javac_cast_intersection
 tools/javac/cast/intersection/IntersectionTypeCastTest.java          generic-all
+
+# tools_javac_defaultMethods_static_hiding
+tools/javac/defaultMethods/static/hiding/InterfaceMethodHidingTest.java         generic-all
+
+# tools_javac_defaultMethods_super
+tools/javac/defaultMethods/super/TestDefaultSuperCall.java           generic-all
 
 # tools_javac_failover
 tools/javac/failover/CheckAttributedTree.java                        generic-all
@@ -26,15 +37,53 @@ tools/javac/lambda/LambdaParserTest.java                             generic-all
 # tools_javac_lambda_intersection
 tools/javac/lambda/intersection/IntersectionTargetTypeTest.java         generic-all
 
+# tools_javac_lambda_lambdaExpression
+tools/javac/lambda/lambdaExpression/SamConversionComboTest.java         generic-all
+
+# tools_javac_lambda_typeInference_combo
+tools/javac/lambda/typeInference/combo/TypeInferenceComboTest.java         generic-all
+
 # tools_javac_lambdaShapes_org_openjdk_tests_javac
 tools/javac/lambdaShapes/org/openjdk/tests/javac/FDTest.java         generic-all
 
-# tools_javac_processing_model_completionfailure
-tools/javac/processing/model/completionfailure/NoAbortForBadClassFile.java         generic-all
+# tools_javac_multicatch_7030606
+tools/javac/multicatch/7030606/DisjunctiveTypeWellFormednessTest.java         generic-all
+
+# tools_javac_patterns
+tools/javac/patterns/BreakAndLoops.java                              generic-all
+tools/javac/patterns/CaseStructureTest.java                          generic-all
+tools/javac/patterns/Exhaustiveness.java                             generic-all
+
+# tools_javac_processing
+tools/javac/processing/TestWarnErrorCount.java                       generic-all
 
 # tools_javac_switchnull
 tools/javac/switchnull/SwitchNull.java                               generic-all
 
+# tools_javac_tree
+tools/javac/tree/JavacTreeScannerTest.java                           generic-all
+tools/javac/tree/MissingSemicolonTest.java                           generic-all
+tools/javac/tree/SourceDocTreeScannerTest.java                       generic-all
+tools/javac/tree/SourceTreeScannerTest.java                          generic-all
+tools/javac/tree/TreePosTest.java                                    generic-all
+
+# tools_javac_varargs_6199075
+tools/javac/varargs/6199075/T6199075.java                            generic-all
+
+# tools_javac_varargs_7042566
+tools/javac/varargs/7042566/T7042566.java                            generic-all
+
+# tools_jdeps
+tools/jdeps/Options.java                                             generic-all
+
 # tools_jdeps_listdeps
 tools/jdeps/listdeps/ListModuleDeps.java                             generic-all
-############################################################################
+
+# tools_jdeps_missingDeps
+tools/jdeps/missingDeps/MissingDepsTest.java                         generic-all
+
+# tools_jdeps_modules
+tools/jdeps/modules/CheckModuleTest.java                             generic-all
+
+# tools_jdeps_multiVersion
+tools/jdeps/multiVersion/MultiVersionError.java                      generic-all
