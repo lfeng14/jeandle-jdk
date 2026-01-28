@@ -3,12 +3,17 @@
 
 # tools_javac_annotations_neg_8022765
 tools/javac/annotations/neg/8022765/VerifyErroneousAnnotationsAttributed.java         generic-all
+tools/javac/annotations/neg/8022765/VerifyErroneousAnnotationsAttributed.java         generic-all
 
 # tools_javac_api
 tools/javac/api/TestClientCodeWrapper.java                           generic-all
 
 # tools_javac_cast_intersection
 tools/javac/cast/intersection/IntersectionTypeCastTest.java          generic-all
+tools/javac/cast/intersection/IntersectionTypeCastTest.java          generic-all
+
+# tools_javac_classfiles_attributes_annotations
+tools/javac/classfiles/attributes/annotations/RuntimeParameterAnnotationsForGenericMethodTest.java         generic-all
 
 # tools_javac_defaultMethods_static_hiding
 tools/javac/defaultMethods/static/hiding/InterfaceMethodHidingTest.java         generic-all
@@ -18,23 +23,33 @@ tools/javac/defaultMethods/super/TestDefaultSuperCall.java           generic-all
 
 # tools_javac_failover
 tools/javac/failover/CheckAttributedTree.java                        generic-all
+tools/javac/failover/CheckAttributedTree.java                        generic-all
 
 # tools_javac_generics_diamond_7030150
 tools/javac/generics/diamond/7030150/GenericConstructorAndDiamondTest.java         generic-all
+tools/javac/generics/diamond/7030150/GenericConstructorAndDiamondTest.java         generic-all
+
+# tools_javac_generics_diamond_7046778
+tools/javac/generics/diamond/7046778/DiamondAndInnerClassTest.java         generic-all
 
 # tools_javac_generics_inference_7086601
+tools/javac/generics/inference/7086601/T7086601b.java                generic-all
 tools/javac/generics/inference/7086601/T7086601b.java                generic-all
 
 # tools_javac_generics_inference_8176534
 tools/javac/generics/inference/8176534/TestUncheckedCalls.java         generic-all
+tools/javac/generics/inference/8176534/TestUncheckedCalls.java         generic-all
 
 # tools_javac_importscope
+tools/javac/importscope/NegativeCyclicDependencyTest.java            generic-all
 tools/javac/importscope/NegativeCyclicDependencyTest.java            generic-all
 
 # tools_javac_lambda
 tools/javac/lambda/LambdaParserTest.java                             generic-all
+tools/javac/lambda/LambdaParserTest.java                             generic-all
 
 # tools_javac_lambda_intersection
+tools/javac/lambda/intersection/IntersectionTargetTypeTest.java         generic-all
 tools/javac/lambda/intersection/IntersectionTargetTypeTest.java         generic-all
 
 # tools_javac_lambda_lambdaExpression
@@ -45,6 +60,7 @@ tools/javac/lambda/typeInference/combo/TypeInferenceComboTest.java         gener
 
 # tools_javac_lambdaShapes_org_openjdk_tests_javac
 tools/javac/lambdaShapes/org/openjdk/tests/javac/FDTest.java         generic-all
+tools/javac/lambdaShapes/org/openjdk/tests/javac/FDTest.java         generic-all
 
 # tools_javac_multicatch_7030606
 tools/javac/multicatch/7030606/DisjunctiveTypeWellFormednessTest.java         generic-all
@@ -53,11 +69,13 @@ tools/javac/multicatch/7030606/DisjunctiveTypeWellFormednessTest.java         ge
 tools/javac/patterns/BreakAndLoops.java                              generic-all
 tools/javac/patterns/CaseStructureTest.java                          generic-all
 tools/javac/patterns/Exhaustiveness.java                             generic-all
+tools/javac/patterns/Exhaustiveness.java                             generic-all
 
 # tools_javac_processing
 tools/javac/processing/TestWarnErrorCount.java                       generic-all
 
 # tools_javac_switchnull
+tools/javac/switchnull/SwitchNull.java                               generic-all
 tools/javac/switchnull/SwitchNull.java                               generic-all
 
 # tools_javac_tree
@@ -67,7 +85,11 @@ tools/javac/tree/SourceDocTreeScannerTest.java                       generic-all
 tools/javac/tree/SourceTreeScannerTest.java                          generic-all
 tools/javac/tree/TreePosTest.java                                    generic-all
 
+# tools_javac_types
+tools/javac/types/TestComparisons.java                               generic-all
+
 # tools_javac_varargs_6199075
+tools/javac/varargs/6199075/T6199075.java                            generic-all
 tools/javac/varargs/6199075/T6199075.java                            generic-all
 
 # tools_javac_varargs_7042566
@@ -78,6 +100,7 @@ tools/jdeps/Options.java                                             generic-all
 
 # tools_jdeps_listdeps
 tools/jdeps/listdeps/ListModuleDeps.java                             generic-all
+tools/jdeps/listdeps/ListModuleDeps.java                             generic-all
 
 # tools_jdeps_missingDeps
 tools/jdeps/missingDeps/MissingDepsTest.java                         generic-all
@@ -86,4 +109,5 @@ tools/jdeps/missingDeps/MissingDepsTest.java                         generic-all
 tools/jdeps/modules/CheckModuleTest.java                             generic-all
 
 # tools_jdeps_multiVersion
+tools/jdeps/multiVersion/MultiVersionError.java                      generic-all
 tools/jdeps/multiVersion/MultiVersionError.java                      generic-all
