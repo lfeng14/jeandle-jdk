@@ -182,7 +182,7 @@ compiler/loopopts/superword/TestUnorderedReduction.java#Vanilla-Unaligned       
 compiler/loopopts/superword/TestUnorderedReductionPartialVectorization.java                    linux-aarch64,linux-x64
 compiler/profiling/TestTypeProfiling.java                                                      linux-aarch64,linux-x64
 compiler/profiling/spectrapredefineclass_classloaders/Launcher.java                            linux-aarch64,linux-x64
-compiler/runtime/TestFloatsOnStackDeopt.java                                                   linux-aarch64
+compiler/runtime/TestFloatsOnStackDeopt.java                                                   linux-aarch64,linux-x64
 compiler/uncommontrap/Decompile.java                                                           linux-aarch64,linux-x64
 compiler/uncommontrap/Test8009761.java                                                         linux-aarch64,linux-x64
 compiler/uncommontrap/TestStackBangMonitorOwned.java                                           linux-aarch64,linux-x64
