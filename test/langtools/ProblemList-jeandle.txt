@@ -2,6 +2,7 @@ jdk/javadoc/doclet/testSupplementary/TestSupplementary.java                     
 jdk/jshell/ClassPathTest.java                                                                       linux-x64
 jdk/jshell/CompletionSuggestionTest.java                                                            linux-x64
 jdk/jshell/ComputeFQNsTest.java                                                                     linux-x64
+jdk/jshell/ErrorRecoveryTest.java                                                                   linux-x64
 jdk/jshell/JShellStateClosedTest.java                                                               linux-x64
 jdk/jshell/MultipleDocumentationTest.java                                                           linux-x64
 jdk/jshell/PasteAndMeasurementsUITest.java                                                          linux-x64
