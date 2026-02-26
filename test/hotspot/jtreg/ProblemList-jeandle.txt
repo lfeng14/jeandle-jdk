@@ -91,6 +91,8 @@ compiler/intrinsics/IntrinsicDisabledTest.java                                  
 compiler/intrinsics/TestBitShuffleOpers.java                                                   linux-aarch64,linux-x64
 compiler/intrinsics/TestCheckIndex.java                                                        linux-aarch64,linux-x64
 compiler/intrinsics/TestCompareUnsigned.java                                                   linux-aarch64,linux-x64
+compiler/intrinsics/TestDoubleIsInfinite.java                                                  linux-x64
+compiler/intrinsics/TestFloatIsInfinite.java                                                   linux-x64
 compiler/intrinsics/TestIntegerUnsignedDivMod.java                                             linux-aarch64,linux-x64
 compiler/intrinsics/TestLongUnsignedDivMod.java                                                linux-aarch64,linux-x64
 compiler/intrinsics/TestRotate.java                                                            linux-aarch64,linux-x64
@@ -142,6 +144,14 @@ compiler/loopopts/superword/TestDependencyOffsets.java#avx2-v016-A              
 compiler/loopopts/superword/TestDependencyOffsets.java#avx2-v016-U                             linux-x64
 compiler/loopopts/superword/TestDependencyOffsets.java#avx2-v032-A                             linux-x64
 compiler/loopopts/superword/TestDependencyOffsets.java#avx2-v032-U                             linux-x64
+compiler/loopopts/superword/TestDependencyOffsets.java#avx512-v032-A                           linux-x64
+compiler/loopopts/superword/TestDependencyOffsets.java#avx512-v032-U                           linux-x64
+compiler/loopopts/superword/TestDependencyOffsets.java#avx512-v064-A                           linux-x64
+compiler/loopopts/superword/TestDependencyOffsets.java#avx512-v064-U                           linux-x64
+compiler/loopopts/superword/TestDependencyOffsets.java#avx512bw-v032-A                         linux-x64
+compiler/loopopts/superword/TestDependencyOffsets.java#avx512bw-v032-U                         linux-x64
+compiler/loopopts/superword/TestDependencyOffsets.java#avx512bw-v064-A                         linux-x64
+compiler/loopopts/superword/TestDependencyOffsets.java#avx512bw-v064-U                         linux-x64
 compiler/loopopts/superword/TestDependencyOffsets.java#sse4-v002-A                             linux-x64
 compiler/loopopts/superword/TestDependencyOffsets.java#sse4-v002-U                             linux-x64
 compiler/loopopts/superword/TestDependencyOffsets.java#sse4-v004-A                             linux-x64
@@ -187,11 +197,12 @@ compiler/vectorization/TestEor3AArch64.java                                     
 compiler/vectorization/TestFloatConversionsVector.java                                         linux-aarch64,linux-x64
 compiler/vectorization/TestNumberOfContinuousZeros.java                                        linux-aarch64,linux-x64
 compiler/vectorization/TestOptionVectorizeIR.java                                              linux-aarch64,linux-x64
-compiler/vectorization/TestPopCountVectorLong.java                                             linux-aarch64
+compiler/vectorization/TestPopCountVectorLong.java                                             linux-aarch64,linux-x64
 compiler/vectorization/TestPopulateIndex.java                                                  linux-aarch64,linux-x64
 compiler/vectorization/TestReverseBitsVector.java                                              linux-aarch64,linux-x64
 compiler/vectorization/TestReverseBytes.java                                                   linux-aarch64,linux-x64
 compiler/vectorization/TestRoundVectAArch64.java                                               linux-aarch64
+compiler/vectorization/TestRoundVectDouble.java                                                linux-x64
 compiler/vectorization/TestRoundVectFloat.java                                                 linux-x64
 compiler/vectorization/TestSignumVector.java                                                   linux-aarch64,linux-x64
 compiler/vectorization/TestSubwordReverseBytes.java                                            linux-aarch64,linux-x64
@@ -242,6 +253,7 @@ runtime/LoadLibrary/TestSunBootLibraryPath.java                                 
 runtime/LocalVariableTable/TestLVT.java                                                        linux-aarch64
 runtime/Metaspace/PrintMetaspaceDcmd.java#test-64bit-ccs                                       linux-aarch64,linux-x64
 runtime/Metaspace/PrintMetaspaceDcmd.java#test-64bit-ccs-guarded                               linux-aarch64,linux-x64
+runtime/StackGap/TestStackGap.java                                                             linux-aarch64
 runtime/Thread/AsyncExceptionTest.java                                                         linux-aarch64,linux-x64
 runtime/Thread/StopAtExit.java                                                                 linux-aarch64,linux-x64
 runtime/Unsafe/InternalErrorTest.java                                                          linux-x64
@@ -253,7 +265,6 @@ runtime/logging/CompressedOopsTest.java                                         
 runtime/modules/AccessCheck/ExpQualToM1PrivateMethodIAE.java                                   linux-aarch64
 runtime/modules/ModulesSymLink.java                                                            linux-aarch64,linux-x64
 runtime/stringtable/StringTableCleaningTest.java                                               linux-aarch64
-runtime/StackGap/TestStackGap.java                                                             linux-aarch64
 serviceability/dcmd/gc/FinalizerInfoTest.java                                                  linux-aarch64,linux-x64
 serviceability/jvmti/GetLocalVariable/GetLocalVars.java                                        linux-aarch64,linux-x64
 serviceability/jvmti/Heap/IterateHeapWithEscapeAnalysisEnabled.java                            linux-aarch64,linux-x64
