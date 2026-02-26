@@ -26,6 +26,7 @@ java/util/concurrent/locks/Lock/TimedAcquireLeak.java                     linux-
 java/util/stream/test/org/openjdk/tests/java/util/stream/SliceOpTest.java linux-aarch64
 java/util/stream/test/org/openjdk/tests/java/util/stream/WhileOpTest.java linux-aarch64
 java/util/logging/LoggingMXBeanTest2.java                                 linux-x64
+java/util/Map/BasicSerialization.java                                     linux-x64
 
 # Java Math Classes
 ############################################################
