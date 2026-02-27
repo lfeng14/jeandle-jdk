@@ -27,6 +27,7 @@ java/util/stream/test/org/openjdk/tests/java/util/stream/SliceOpTest.java linux-
 java/util/stream/test/org/openjdk/tests/java/util/stream/WhileOpTest.java linux-aarch64
 java/util/logging/LoggingMXBeanTest2.java                                 linux-x64
 java/util/Map/BasicSerialization.java                                     linux-x64
+java/util/Collection/HotPotatoes.java                                     linux-x64
 
 # Java Math Classes
 ############################################################
@@ -65,8 +66,10 @@ jdk/jshell/ToolShiftTabTest.java                                          linux-
 jdk/jshell/ToolSimpleTest.java                                            linux-aarch64,linux-x64
 jdk/jshell/ToolTabSnippetTest.java                                        linux-x64
 jdk/jshell/ToolingTest.java                                               linux-aarch64,linux-x64
+jdk/jshell/ExceptionsTest.java                                            linux-x64
 
 # Test Related
 ############################################################
 java/foreign/TestHandshake.java                                           linux-aarch64,linux-x64
+java/foreign/TestMemorySession.java                                       linux-x64
 com/sun/crypto/provider/Cipher/AEAD/GCMShortBuffer.java                   linux-aarch64,linux-x64
