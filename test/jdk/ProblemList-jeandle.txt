@@ -28,6 +28,7 @@ java/util/stream/test/org/openjdk/tests/java/util/stream/WhileOpTest.java linux-
 java/util/logging/LoggingMXBeanTest2.java                                 linux-x64
 java/util/logging/TestLogConfigurationDeadLockWithConf.java               linux-x64
 java/util/logging/TestLoggerBundleSync.java                               linux-x64
+java/util/logging/LoggingDeadlock3.java                                   linux-x64
 java/util/Map/BasicSerialization.java                                     linux-x64
 java/util/Collection/HotPotatoes.java                                     linux-x64
 
