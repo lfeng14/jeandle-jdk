@@ -31,6 +31,7 @@ jdk/jshell/InaccessibleExpressionTest.java                                      
 jdk/jshell/GetResourceTest.java                                                                     linux-x64
 jdk/jshell/ReplaceTest.java.                                                                        linux-x64
 jdk/jshell/UserExecutionControlTest.java                                                            linux-x64
+jdk/jshell/IdGeneratorTest.java                                                                     linux-x64
 tools/javac/annotations/MissingAnnotationClassFile.java                                             linux-x64
 tools/javac/annotations/neg/8022765/VerifyErroneousAnnotationsAttributed.java                       linux-x64
 tools/javac/cast/intersection/IntersectionTypeCastTest.java                                         linux-x64

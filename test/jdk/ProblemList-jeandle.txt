@@ -19,6 +19,7 @@ java/math/BigInteger/largeMemory/SymmetricRangeTests.java                  linux
 java/util/Base64/TestBase64.java                                           linux-x64,linux-aarch64
 java/util/BitSet/stream/BitSetStreamTest.java                              linux-x64
 java/util/Collection/HotPotatoes.java                                      linux-x64
+java/util/Collection/MOAT.java                                             linux-x64
 java/util/Map/BasicSerialization.java                                      linux-x64
 java/util/Objects/CheckLongIndex.java                                      linux-aarch64
 java/util/Optional/Basic.java                                              linux-x64
