@@ -29,7 +29,7 @@ jdk/jshell/IndentUITest.java                                                    
 jdk/jshell/InferTypeTest.java                                                                       linux-x64
 jdk/jshell/InaccessibleExpressionTest.java                                                          linux-x64
 jdk/jshell/GetResourceTest.java                                                                     linux-x64
-jdk/jshell/ReplaceTest.java.                                                                        linux-x64
+jdk/jshell/ReplaceTest.java                                                                         linux-x64
 jdk/jshell/UserExecutionControlTest.java                                                            linux-x64
 jdk/jshell/IdGeneratorTest.java                                                                     linux-x64
 tools/javac/annotations/MissingAnnotationClassFile.java                                             linux-x64
