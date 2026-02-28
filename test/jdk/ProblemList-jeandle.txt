@@ -1,6 +1,6 @@
 com/sun/crypto/provider/Cipher/AEAD/GCMShortBuffer.java                    linux-aarch64,linux-x64
 java/foreign/TestHandshake.java                                            linux-aarch64,linux-x64
-java/foreign/TestMemorySession.java                                        linux-x64
+java/foreign/TestMemorySession.java                                        linux-aarch64,linux-x64
 java/lang/Character/UnicodeCasingTest.java                                 linux-aarch64
 java/lang/Math/Log1pTests.java                                             linux-aarch64
 java/lang/Object/FinalizationOption.java                                   linux-aarch64,linux-x64

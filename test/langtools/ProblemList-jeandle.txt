@@ -25,6 +25,7 @@ jdk/jshell/ToolTabCommandTest.java                                              
 jdk/jshell/TypeNameTest.java                                                                        linux-x64
 jdk/jshell/UnicodeTest.java                                                                         linux-x64
 jdk/jshell/UnnamedTest.java                                                                         linux-x64
+jdk/jshell/IndentUITest.java                                                                        linux-x64
 tools/javac/annotations/MissingAnnotationClassFile.java                                             linux-x64
 tools/javac/annotations/neg/8022765/VerifyErroneousAnnotationsAttributed.java                       linux-x64
 tools/javac/cast/intersection/IntersectionTypeCastTest.java                                         linux-x64
