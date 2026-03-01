@@ -33,6 +33,9 @@ jdk/jshell/ReplaceTest.java                                                     
 jdk/jshell/UserExecutionControlTest.java                                                            linux-x64
 jdk/jshell/IdGeneratorTest.java                                                                     linux-x64
 jdk/jshell/IgnoreTest.java                                                                          linux-x64
+jdk/jshell/IOTest.java                                                                              linux-x64
+jdk/jshell/NullTest.java                                                                            linux-x64
+jdk/jshell/UndefinedClassTest.java                                                                  linux-x64
 tools/javac/annotations/MissingAnnotationClassFile.java                                             linux-x64
 tools/javac/annotations/neg/8022765/VerifyErroneousAnnotationsAttributed.java                       linux-x64
 tools/javac/cast/intersection/IntersectionTypeCastTest.java                                         linux-x64
