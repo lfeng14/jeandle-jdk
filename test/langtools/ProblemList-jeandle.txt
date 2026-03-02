@@ -200,6 +200,7 @@ jdk/jshell/SealedClassesTest.java                                               
 jdk/jshell/ShutdownTest.java                                                                        linux-x64
 jdk/jshell/SimpleRegressionTest.java                                                                linux-x64
 jdk/jshell/SnippetHighlightTest.java                                                                linux-x64
+jdk/jshell/SnippetStatusListenerTest.java                                                           linux-x64
 jdk/jshell/SourceLevelTest.java                                                                     linux-x64
 jdk/jshell/StartOptionTest.java                                                                     linux-x64
 jdk/jshell/StopExecutionTest.java                                                                   linux-x64
