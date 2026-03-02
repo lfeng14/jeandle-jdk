@@ -12,6 +12,7 @@ jdk/javadoc/doclet/testAuthor/TestAuthor.java                                   
 jdk/javadoc/doclet/testAutoHeaderId/TestAutoHeaderId.java                                           linux-x64
 jdk/javadoc/doclet/testBackSlashInLink/TestBackSlashInLink.java                                     linux-x64
 jdk/javadoc/doclet/testBadHtml/TestBadHtml.java                                                     linux-x64
+jdk/javadoc/doclet/testBadPackageFileInJar/TestBadPackageFileInJar.java                             linux-x64
 jdk/javadoc/doclet/testBadSourceFile/TestBadSourceFile.java                                         linux-x64
 jdk/javadoc/doclet/testBaseClass/TestBaseClass.java                                                 linux-x64
 jdk/javadoc/doclet/testBimodalTaglets/TestBimodalTaglets.java                                       linux-x64
@@ -76,7 +77,9 @@ jdk/javadoc/doclet/testHtmlTag/TestHtmlTag.java                                 
 jdk/javadoc/doclet/testHtmlVersion/TestHtmlVersion.java                                             linux-x64
 jdk/javadoc/doclet/testIncluded/TestIncluded.java                                                   linux-x64
 jdk/javadoc/doclet/testIndex/TestIndex.java                                                         linux-x64
+jdk/javadoc/doclet/testIndex/TestSelfIndexing.java                                                  linux-x64
 jdk/javadoc/doclet/testIndexFiles/TestIndexFiles.java                                               linux-x64
+jdk/javadoc/doclet/testIndexInDocFiles/TestIndexInDocFiles.java                                     linux-x64
 jdk/javadoc/doclet/testIndexInPackageFiles/TestIndexInPackageFiles.java                             linux-x64
 jdk/javadoc/doclet/testIndexInherited/TestIndexInherited.java                                       linux-x64
 jdk/javadoc/doclet/testIndexTaglet/TestIndexTaglet.java                                             linux-x64
@@ -105,6 +108,7 @@ jdk/javadoc/doclet/testLinkPlatform/TestLinkPlatform.java                       
 jdk/javadoc/doclet/testLinkTaglet/TestLinkNotFound.java                                             linux-x64
 jdk/javadoc/doclet/testLinkTaglet/TestLinkTaglet.java                                               linux-x64
 jdk/javadoc/doclet/testLinkTaglet/TestLinkTagletPrimitive.java                                      linux-x64
+jdk/javadoc/doclet/testLinkToSerialForm/TestLinkToSerialForm.java                                   linux-x64
 jdk/javadoc/doclet/testLinksWithNoDeprecatedOption/TestLinksWithNoDeprecatedOption.java             linux-x64
 jdk/javadoc/doclet/testMemberInheritance/TestMemberInheritance.java                                 linux-x64
 jdk/javadoc/doclet/testMemberSummary/TestMemberSummary.java                                         linux-x64
@@ -122,6 +126,7 @@ jdk/javadoc/doclet/testNestedGenerics/TestNestedGenerics.java                   
 jdk/javadoc/doclet/testNestedInlineTags/TestNestedIndexTag.java                                     linux-x64
 jdk/javadoc/doclet/testNestedInlineTags/TestNestedLinkTag.java                                      linux-x64
 jdk/javadoc/doclet/testNestedInlineTags/TestNestedReturnTag.java                                    linux-x64
+jdk/javadoc/doclet/testNestedInlineTags/TestNestedSummaryTag.java                                   linux-x64
 jdk/javadoc/doclet/testNewApiList/TestNewApiList.java                                               linux-x64
 jdk/javadoc/doclet/testNewLanguageFeatures/TestNewLanguageFeatures.java                             linux-x64
 jdk/javadoc/doclet/testNoFrames/TestNoFrames.java                                                   linux-x64
@@ -131,6 +136,7 @@ jdk/javadoc/doclet/testNonInlineHtmlTagRemoval/TestNonInlineHtmlTagRemoval.java 
 jdk/javadoc/doclet/testNotifications/TestNotifications.java                                         linux-x64
 jdk/javadoc/doclet/testOptions/TestOptions.java                                                     linux-x64
 jdk/javadoc/doclet/testOrdering/TestOrdering.java                                                   linux-x64
+jdk/javadoc/doclet/testOverriddenMethods/TestBadOverride.java                                       linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestMultiInheritance.java                                  linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenDeprecatedMethods.java                       linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenMethodDocCopy.java                           linux-x64
@@ -140,9 +146,11 @@ jdk/javadoc/doclet/testPackageDescription/TestPackageDescription.java           
 jdk/javadoc/doclet/testParamTaglet/TestParamTaglet.java                                             linux-x64
 jdk/javadoc/doclet/testRecordLinks/TestRecordLinks.java                                             linux-x64
 jdk/javadoc/doclet/testSeeTag/TestSeeTag.java                                                       linux-x64
+jdk/javadoc/doclet/testSerializedForm/TestSerializedForm.java                                       linux-x64
 jdk/javadoc/doclet/testSerializedFormDeprecationInfo/TestSerializedFormDeprecationInfo.java         linux-x64
 jdk/javadoc/doclet/testSupplementary/TestSupplementary.java                                         linux-aarch64,linux-x64
 jdk/javadoc/doclet/testTopOption/TestTopOption.java                                                 linux-x64
+jdk/javadoc/doclet/testUnnamedPackage/TestUnnamedPackage.java                                       linux-x64
 jdk/javadoc/doclet/testValueTag/TestValueTagInModule.java                                           linux-x64
 jdk/javadoc/tool/IgnoreSourceErrors.java                                                            linux-x64
 jdk/javadoc/tool/QuietOption.java                                                                   linux-x64
@@ -214,8 +222,8 @@ jdk/jshell/UndefinedClassTest.java                                              
 jdk/jshell/UnicodeTest.java                                                                         linux-x64
 jdk/jshell/UnnamedTest.java                                                                         linux-x64
 jdk/jshell/UserExecutionControlTest.java                                                            linux-x64
-jdk/jshell/WrapperTest.java                                                                         linux-x64
 jdk/jshell/VariablesTest.java                                                                       linux-x64
+jdk/jshell/WrapperTest.java                                                                         linux-x64
 tools/EnumAccessible.java                                                                           linux-x64
 tools/doclint/SyntheticTest.java                                                                    linux-x64
 tools/javac/6402516/CheckLocalElements.java                                                         linux-x64
@@ -223,6 +231,7 @@ tools/javac/6508981/TestInferBinaryName.java                                    
 tools/javac/6917288/GraphicalInstallerTest.java                                                     linux-x64
 tools/javac/7129225/TestImportStar.java                                                             linux-x64
 tools/javac/7142086/T7142086.java                                                                   linux-x64
+tools/javac/AnonymousClass/AnonymousCtorExceptionTest.java                                          linux-x64
 tools/javac/EarlyAssert.java                                                                        linux-x64
 tools/javac/MethodParameters/ClassReaderTest/ClassReaderTest.java                                   linux-x64
 tools/javac/T6595666.java                                                                           linux-x64
@@ -231,6 +240,8 @@ tools/javac/T8181464/LambdaInAnnotationsCausesNPETest1.java                     
 tools/javac/T8181464/LambdaInAnnotationsCausesNPETest2.java                                         linux-x64
 tools/javac/T8181464/LambdaInAnnotationsCausesNPETest3.java                                         linux-x64
 tools/javac/annotations/MissingAnnotationClassFile.java                                             linux-x64
+tools/javac/annotations/ReadingMethodWithTypeAnno.java                                              linux-x64
+tools/javac/annotations/TestParameterAnnotationOnReceiverType.java                                  linux-x64
 tools/javac/annotations/neg/8022765/VerifyErroneousAnnotationsAttributed.java                       linux-x64
 tools/javac/annotations/typeAnnotations/failures/TypeVariableMissingTA.java                         linux-x64
 tools/javac/annotations/typeAnnotations/referenceinfos/ConstructorInvocationTypeArgument.java       linux-x64
