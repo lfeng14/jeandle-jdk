@@ -181,6 +181,8 @@ jdk/jshell/UnicodeTest.java                                                     
 jdk/jshell/UnnamedTest.java                                                                         linux-x64
 jdk/jshell/UserExecutionControlTest.java                                                            linux-x64
 jdk/jshell/WrapperTest.java                                                                         linux-x64
+jdk/jshell/MethodsTest.java                                                                         linux-x64
+jdk/jshell/ModifiersTest.java                                                                       linux-x64
 tools/doclint/SyntheticTest.java                                                                    linux-x64
 tools/javac/7142086/T7142086.java                                                                   linux-x64
 tools/javac/T6595666.java                                                                           linux-x64
