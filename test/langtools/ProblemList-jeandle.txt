@@ -193,6 +193,7 @@ jdk/jshell/UnicodeTest.java                                                     
 jdk/jshell/UnnamedTest.java                                                                         linux-x64
 jdk/jshell/UserExecutionControlTest.java                                                            linux-x64
 jdk/jshell/WrapperTest.java                                                                         linux-x64
+jdk/jshell/SealedClassesTest.java                                                                   linux-x64
 tools/EnumAccessible.java                                                                           linux-x64
 tools/doclint/SyntheticTest.java                                                                    linux-x64
 tools/javac/6508981/TestInferBinaryName.java                                                        linux-x64
