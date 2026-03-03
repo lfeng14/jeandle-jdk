@@ -226,6 +226,8 @@ jdk/jshell/SourceLevelTest.java                                                 
 jdk/jshell/StartOptionTest.java                                                                     linux-x64
 jdk/jshell/StopExecutionTest.java                                                                   linux-x64
 jdk/jshell/T8146368/JShellToolTest8146368.java                                                      linux-x64
+jdk/jshell/Test8294583.java                                                                         linux-x64
+jdk/jshell/Test8296012.java                                                                         linux-x64
 jdk/jshell/ToolCommandOptionTest.java                                                               linux-aarch64,linux-x64
 jdk/jshell/ToolEnableNativeAccessTest.java                                                          linux-x64
 jdk/jshell/ToolEnablePreviewTest.java                                                               linux-aarch64,linux-x64
@@ -246,8 +248,6 @@ jdk/jshell/UnnamedTest.java                                                     
 jdk/jshell/UserExecutionControlTest.java                                                            linux-x64
 jdk/jshell/VariablesTest.java                                                                       linux-x64
 jdk/jshell/WrapperTest.java                                                                         linux-x64
-jdk/jshell/Test8294583.java                                                                         linux-x64
-jdk/jshell/Test8296012.java                                                                         linux-x64
 tools/EnumAccessible.java                                                                           linux-x64
 tools/doclint/RecordCompactConstructorTest.java                                                     linux-x64
 tools/doclint/RecordParamsTest.java                                                                 linux-x64
