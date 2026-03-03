@@ -1,3 +1,4 @@
+jdk/javadoc/doclet/5093723/T5093723.java                                                            linux-x64
 jdk/javadoc/doclet/JavascriptWinTitle/JavascriptWinTitle.java                                       linux-x64
 jdk/javadoc/doclet/MetaTag/MetaTag.java                                                             linux-x64
 jdk/javadoc/doclet/T6735320/T6735320.java                                                           linux-x64
@@ -133,6 +134,8 @@ jdk/javadoc/doclet/testModules/TestModulePackages.java                          
 jdk/javadoc/doclet/testModules/TestModuleServices.java                                              linux-x64
 jdk/javadoc/doclet/testModules/TestModuleServicesLink.java                                          linux-x64
 jdk/javadoc/doclet/testModules/TestModules.java                                                     linux-x64
+jdk/javadoc/doclet/testNavigation/TestModuleNavigation.java                                         linux-x64
+jdk/javadoc/doclet/testNavigation/TestNavigation.java                                               linux-x64
 jdk/javadoc/doclet/testNestedClasses/TestNestedClasses.java                                         linux-x64
 jdk/javadoc/doclet/testNestedGenerics/TestNestedGenerics.java                                       linux-x64
 jdk/javadoc/doclet/testNestedInlineTags/TestNestedIndexTag.java                                     linux-x64
@@ -165,17 +168,20 @@ jdk/javadoc/doclet/testSerializedForm/TestSerializedForm.java                   
 jdk/javadoc/doclet/testSerializedFormDeprecationInfo/TestSerializedFormDeprecationInfo.java         linux-x64
 jdk/javadoc/doclet/testSerializedFormWithSee/TestSerializedFormWithSee.java                         linux-x64
 jdk/javadoc/doclet/testSinceTag/TestSinceTag.java                                                   linux-x64
+jdk/javadoc/doclet/testSnippetTag/TestLangProperties.java                                           linux-x64
 jdk/javadoc/doclet/testSupplementary/TestSupplementary.java                                         linux-aarch64,linux-x64
 jdk/javadoc/doclet/testTopOption/TestTopOption.java                                                 linux-x64
 jdk/javadoc/doclet/testUnnamedPackage/TestUnnamedPackage.java                                       linux-x64
 jdk/javadoc/doclet/testValueTag/TestValueTag.java                                                   linux-x64
 jdk/javadoc/doclet/testValueTag/TestValueTagInModule.java                                           linux-x64
+jdk/javadoc/tool/6942366/T6942366.java                                                              linux-x64
 jdk/javadoc/tool/6958836/Test.java                                                                  linux-x64
 jdk/javadoc/tool/IgnoreSourceErrors.java                                                            linux-x64
 jdk/javadoc/tool/QuietOption.java                                                                   linux-x64
 jdk/javadoc/tool/VerifyLocale.java                                                                  linux-x64
 jdk/javadoc/tool/badSuper/BadSuper.java                                                             linux-x64
 jdk/javadoc/tool/example/Tester.java                                                                linux-x64
+jdk/javadoc/tool/exceptionHandling/TestExceptionHandling.java                                       linux-x64
 jdk/javadoc/tool/nonConstExprs/Test.java                                                            linux-x64
 jdk/javadoc/tool/sourceOption/SourceOption.java                                                     linux-x64
 jdk/jshell/AnalyzeSnippetTest.java                                                                  linux-x64
@@ -248,7 +254,6 @@ jdk/jshell/UnnamedTest.java                                                     
 jdk/jshell/UserExecutionControlTest.java                                                            linux-x64
 jdk/jshell/VariablesTest.java                                                                       linux-x64
 jdk/jshell/WrapperTest.java                                                                         linux-x64
-jdk/javadoc/doclet/5093723/T5093723.java                                                            linux-x64
 tools/EnumAccessible.java                                                                           linux-x64
 tools/doclint/RecordCompactConstructorTest.java                                                     linux-x64
 tools/doclint/RecordParamsTest.java                                                                 linux-x64
@@ -272,6 +277,7 @@ tools/javac/annotations/MissingAnnotationClassFile.java                         
 tools/javac/annotations/ReadingMethodWithTypeAnno.java                                              linux-x64
 tools/javac/annotations/TestParameterAnnotationOnReceiverType.java                                  linux-x64
 tools/javac/annotations/neg/8022765/VerifyErroneousAnnotationsAttributed.java                       linux-x64
+tools/javac/annotations/typeAnnotations/classfile/Patterns.java                                     linux-x64
 tools/javac/annotations/typeAnnotations/classfile/TestAnonInnerClasses.java                         linux-x64
 tools/javac/annotations/typeAnnotations/failures/TypeVariableMissingTA.java                         linux-x64
 tools/javac/annotations/typeAnnotations/referenceinfos/ConstructorInvocationTypeArgument.java       linux-x64
@@ -281,6 +287,8 @@ tools/javac/annotations/typeAnnotations/referenceinfos/MethodParameters.java    
 tools/javac/annotations/typeAnnotations/referenceinfos/MethodReturns.java                           linux-x64
 tools/javac/api/6421111/T6421111.java                                                               linux-x64
 tools/javac/api/6431435/T6431435.java                                                               linux-x64
+tools/javac/api/6437349/T6437349.java                                                               linux-x64
+tools/javac/api/6557752/T6557752.java                                                               linux-x64
 tools/javac/api/6733837/T6733837.java                                                               linux-x64
 tools/javac/api/7086261/T7086261.java                                                               linux-x64
 tools/javac/api/T6358786.java                                                                       linux-x64
@@ -290,7 +298,9 @@ tools/javac/api/TestGetScopeErrors.java                                         
 tools/javac/api/TestGetScopeResult.java                                                             linux-x64
 tools/javac/api/TestJavacTaskScanner.java                                                           linux-x64
 tools/javac/api/TestModuleUnnamedPackage.java                                                       linux-x64
+tools/javac/api/TestTreePath.java                                                                   linux-x64
 tools/javac/api/file/SJFM_GetFileObjects.java                                                       linux-x64
+tools/javac/api/lambdaErrorRecovery/TestGetTypeMirrorReference.java                                 linux-x64
 tools/javac/api/taskListeners/TestTypeElement.java                                                  linux-x64
 tools/javac/cast/intersection/IntersectionTypeCastTest.java                                         linux-x64
 tools/javac/classfiles/attributes/LineNumberTable/RuleSwitchBreaks.java                             linux-x64
@@ -335,6 +345,7 @@ tools/javac/modules/BrokenModulesTest.java                                      
 tools/javac/modules/ConvenientAccessErrorsTest.java                                                 linux-x64
 tools/javac/modules/JavaBaseTest.java                                                               linux-x64
 tools/javac/modules/ObscureMessageForBadProvidesTest.java                                           linux-x64
+tools/javac/modules/SingleModuleModeTest.java                                                       linux-x64
 tools/javac/modules/T8158224/T8158224.java                                                          linux-x64
 tools/javac/nestmates/CheckNestmateAttrs.java                                                       linux-x64
 tools/javac/newlines/NewLineTest.java                                                               linux-x64
@@ -348,6 +359,7 @@ tools/javac/patterns/Unnamed.java                                               
 tools/javac/patterns/UnnamedErrors.java                                                             linux-aarch64
 tools/javac/plugin/AutostartPlugins.java                                                            linux-x64
 tools/javac/plugin/InternalAPI.java                                                                 linux-x64
+tools/javac/plugin/MultiplePlugins.java                                                             linux-x64
 tools/javac/processing/6365040/T6365040.java                                                        linux-x64
 tools/javac/processing/6511613/clss41701.java                                                       linux-x64
 tools/javac/processing/6994946/SemanticErrorTest.java                                               linux-x64
