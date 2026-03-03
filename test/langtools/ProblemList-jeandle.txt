@@ -184,6 +184,7 @@ jdk/javadoc/tool/example/Tester.java                                            
 jdk/javadoc/tool/exceptionHandling/TestExceptionHandling.java                                       linux-x64
 jdk/javadoc/tool/nonConstExprs/Test.java                                                            linux-x64
 jdk/javadoc/tool/sourceOption/SourceOption.java                                                     linux-x64
+jdk/javadoc/doclet/AccessAsciiArt/AccessAsciiArt.java                                               linux-x64
 jdk/jshell/AnalyzeSnippetTest.java                                                                  linux-x64
 jdk/jshell/ClassPathTest.java                                                                       linux-x64
 jdk/jshell/CommandCompletionTest.java                                                               linux-aarch64,linux-x64
