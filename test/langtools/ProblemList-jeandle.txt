@@ -2,6 +2,7 @@ jdk/javadoc/doclet/5093723/T5093723.java                                        
 jdk/javadoc/doclet/AccessAsciiArt/AccessAsciiArt.java                                               linux-x64
 jdk/javadoc/doclet/AccessH1/AccessH1.java                                                           linux-x64
 jdk/javadoc/doclet/AccessSkipNav/AccessSkipNav.java                                                 linux-x64
+jdk/javadoc/doclet/AccessSummary/AccessSummary.java                                                 linux-x64
 jdk/javadoc/doclet/JavascriptWinTitle/JavascriptWinTitle.java                                       linux-x64
 jdk/javadoc/doclet/MetaTag/MetaTag.java                                                             linux-x64
 jdk/javadoc/doclet/T6735320/T6735320.java                                                           linux-x64
@@ -158,6 +159,7 @@ jdk/javadoc/doclet/testOverriddenMethods/TestBadOverride.java                   
 jdk/javadoc/doclet/testOverriddenMethods/TestMultiInheritance.java                                  linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenDeprecatedMethods.java                       linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenMethodDocCopy.java                           linux-x64
+jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenPrivateMethods.java                          linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenPrivateMethodsWithPrivateFlag.java           linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestOverrideMethods.java                                   linux-x64
 jdk/javadoc/doclet/testPackageAnnotation/TestPackageAnnotation.java                                 linux-x64
@@ -190,9 +192,9 @@ jdk/javadoc/tool/VerifyLocale.java                                              
 jdk/javadoc/tool/badSuper/BadSuper.java                                                             linux-x64
 jdk/javadoc/tool/example/Tester.java                                                                linux-x64
 jdk/javadoc/tool/exceptionHandling/TestExceptionHandling.java                                       linux-x64
+jdk/javadoc/tool/modules/MissingSourceModules.java                                                  linux-x64
 jdk/javadoc/tool/nonConstExprs/Test.java                                                            linux-x64
 jdk/javadoc/tool/sourceOption/SourceOption.java                                                     linux-x64
-jdk/javadoc/doclet/AccessSummary/AccessSummary.java                                                 linux-x64
 jdk/jshell/AnalyzeSnippetTest.java                                                                  linux-x64
 jdk/jshell/ClassPathTest.java                                                                       linux-x64
 jdk/jshell/CommandCompletionTest.java                                                               linux-aarch64,linux-x64
@@ -303,6 +305,7 @@ tools/javac/api/6421111/T6421111.java                                           
 tools/javac/api/6431435/T6431435.java                                                               linux-x64
 tools/javac/api/6437349/T6437349.java                                                               linux-x64
 tools/javac/api/6557752/T6557752.java                                                               linux-x64
+tools/javac/api/6598108/T6598108.java                                                               linux-x64
 tools/javac/api/6733837/T6733837.java                                                               linux-x64
 tools/javac/api/7086261/T7086261.java                                                               linux-x64
 tools/javac/api/T6358786.java                                                                       linux-x64
@@ -332,6 +335,7 @@ tools/javac/classfiles/attributes/annotations/RuntimeParameterAnnotationsForLamb
 tools/javac/classfiles/attributes/deprecated/DeprecatedTest.java                                    linux-x64
 tools/javac/classfiles/attributes/innerclasses/InnerAnnotationsInInnerAnnotationTest.java           linux-x64
 tools/javac/classfiles/attributes/innerclasses/InnerAnnotationsInInnerInterfaceTest.java            linux-x64
+tools/javac/classfiles/attributes/innerclasses/InnerClassesInAnonymousClassTest.java                linux-x64
 tools/javac/classfiles/attributes/innerclasses/InnerClassesInInnerClassTest.java                    linux-x64
 tools/javac/classfiles/attributes/innerclasses/InnerClassesInInnerInterfaceTest.java                linux-x64
 tools/javac/classfiles/attributes/innerclasses/InnerClassesTest.java                                linux-x64
