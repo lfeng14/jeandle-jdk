@@ -454,3 +454,4 @@ tools/jdeps/listdeps/ListModuleDeps.java                                        
 tools/jdeps/missingDeps/MissingDepsTest.java                                                        linux-x64
 tools/jdeps/modules/CheckModuleTest.java                                                            linux-x64
 tools/jdeps/multiVersion/MultiVersionError.java                                                     linux-x64
+jdk/javadoc/doclet/AuthorDD/AuthorDD.java                                                           linux-x64
