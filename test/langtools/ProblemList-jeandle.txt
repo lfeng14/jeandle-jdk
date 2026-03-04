@@ -3,6 +3,7 @@ jdk/javadoc/doclet/AccessAsciiArt/AccessAsciiArt.java                           
 jdk/javadoc/doclet/AccessH1/AccessH1.java                                                           linux-x64
 jdk/javadoc/doclet/AccessSkipNav/AccessSkipNav.java                                                 linux-x64
 jdk/javadoc/doclet/AccessSummary/AccessSummary.java                                                 linux-x64
+jdk/javadoc/doclet/AuthorDD/AuthorDD.java                                                           linux-x64
 jdk/javadoc/doclet/JavascriptWinTitle/JavascriptWinTitle.java                                       linux-x64
 jdk/javadoc/doclet/MetaTag/MetaTag.java                                                             linux-x64
 jdk/javadoc/doclet/T6735320/T6735320.java                                                           linux-x64
@@ -130,6 +131,7 @@ jdk/javadoc/doclet/testMethodSignature/TestMethodSignature.java                 
 jdk/javadoc/doclet/testMethodTypes/TestMethodTypes.java                                             linux-x64
 jdk/javadoc/doclet/testMissingComment/TestMissingComment.java                                       linux-x64
 jdk/javadoc/doclet/testMissingType/TestMissingType.java                                             linux-x64
+jdk/javadoc/doclet/testModifierEx/TestModifierEx.java                                               linux-x64
 jdk/javadoc/doclet/testModuleDirs/TestModuleDirs.java                                               linux-x64
 jdk/javadoc/doclet/testModuleSpecificStylesheet/TestModuleSpecificStylesheet.java                   linux-x64
 jdk/javadoc/doclet/testModules/TestEmptyModule.java                                                 linux-x64
@@ -162,6 +164,7 @@ jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenMethodDocCopy.java       
 jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenPrivateMethods.java                          linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestOverriddenPrivateMethodsWithPrivateFlag.java           linux-x64
 jdk/javadoc/doclet/testOverriddenMethods/TestOverrideMethods.java                                   linux-x64
+jdk/javadoc/doclet/testOverriddenMethods/TestSpecifiedBy.java                                       linux-x64
 jdk/javadoc/doclet/testPackageAnnotation/TestPackageAnnotation.java                                 linux-x64
 jdk/javadoc/doclet/testPackageDescription/TestPackageDescription.java                               linux-x64
 jdk/javadoc/doclet/testPackageSummary/TestPackageSummary.java                                       linux-x64
@@ -174,6 +177,7 @@ jdk/javadoc/doclet/testSerialMissing/TestSerialMissing.java                     
 jdk/javadoc/doclet/testSerializedForm/TestSerializedForm.java                                       linux-x64
 jdk/javadoc/doclet/testSerializedFormDeprecationInfo/TestSerializedFormDeprecationInfo.java         linux-x64
 jdk/javadoc/doclet/testSerializedFormWithSee/TestSerializedFormWithSee.java                         linux-x64
+jdk/javadoc/doclet/testSimpleTagInherit/TestSimpleTagInherit.java                                   linux-x64
 jdk/javadoc/doclet/testSinceTag/TestSinceTag.java                                                   linux-x64
 jdk/javadoc/doclet/testSnippetTag/TestLangProperties.java                                           linux-x64
 jdk/javadoc/doclet/testStylesheet/TestStylesheet.java                                               linux-x64
@@ -325,6 +329,7 @@ tools/javac/api/taskListeners/TestTypeElement.java                              
 tools/javac/attr/AttrRecoveryTest.java                                                              linux-x64
 tools/javac/cast/intersection/IntersectionTypeCastTest.java                                         linux-x64
 tools/javac/classfiles/ClassVersionChecker.java                                                     linux-x64
+tools/javac/classfiles/attributes/LineNumberTable/MultipleRecordPatterns.java                       linux-x64
 tools/javac/classfiles/attributes/LineNumberTable/RuleSwitchBreaks.java                             linux-x64
 tools/javac/classfiles/attributes/LineNumberTable/StringSwitchBreaks.java                           linux-x64
 tools/javac/classfiles/attributes/Module/ModuleTest.java                                            linux-x64
@@ -388,6 +393,7 @@ tools/javac/plugin/AutostartPlugins.java                                        
 tools/javac/plugin/InternalAPI.java                                                                 linux-x64
 tools/javac/plugin/MultiplePlugins.java                                                             linux-x64
 tools/javac/policy/test3/Test.java                                                                  linux-x64
+tools/javac/preview/PreviewErrors.java                                                              linux-x64
 tools/javac/processing/6365040/T6365040.java                                                        linux-x64
 tools/javac/processing/6511613/clss41701.java                                                       linux-x64
 tools/javac/processing/6994946/SemanticErrorTest.java                                               linux-x64
@@ -454,4 +460,3 @@ tools/jdeps/listdeps/ListModuleDeps.java                                        
 tools/jdeps/missingDeps/MissingDepsTest.java                                                        linux-x64
 tools/jdeps/modules/CheckModuleTest.java                                                            linux-x64
 tools/jdeps/multiVersion/MultiVersionError.java                                                     linux-x64
-jdk/javadoc/doclet/AuthorDD/AuthorDD.java                                                           linux-x64
