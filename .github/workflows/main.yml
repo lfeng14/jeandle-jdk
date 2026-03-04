@@ -29,8 +29,6 @@ name: 'OpenJDK GHA Sanity Checks'
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, unlabeled]
-    branches:
-      - 'main'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
