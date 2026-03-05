@@ -188,6 +188,7 @@ jdk/javadoc/doclet/testTopOption/TestTopOption.java                             
 jdk/javadoc/doclet/testUnnamedPackage/TestUnnamedPackage.java                                       linux-x64
 jdk/javadoc/doclet/testValueTag/TestValueTag.java                                                   linux-x64
 jdk/javadoc/doclet/testValueTag/TestValueTagInModule.java                                           linux-x64
+jdk/javadoc/doclet/constantValues/TestConstantValuesDriver.java                                     linux-x64
 jdk/javadoc/tool/6942366/T6942366.java                                                              linux-x64
 jdk/javadoc/tool/6958836/Test.java                                                                  linux-x64
 jdk/javadoc/tool/IgnoreSourceErrors.java                                                            linux-x64
