@@ -86,7 +86,8 @@ compiler/codegen/TestTrichotomyExpressions.java                                 
 compiler/escapeAnalysis/Test6775880.java                                                       linux-aarch64,linux-x64
 compiler/escapeAnalysis/TestIterativeEA.java                                                   linux-aarch64,linux-x64
 compiler/exceptions/OptimizeImplicitExceptions.java                                            linux-aarch64,linux-x64
-compiler/gcbarriers/TestZGCBarrierElision.java                                                 linux-aarch64,linux-x64
+compiler/gcbarriers/TestZGCBarrierElision.java#id0                                             linux-aarch64,linux-x64
+compiler/gcbarriers/TestZGCBarrierElision.java#id1                                             linux-aarch64,linux-x64
 compiler/inlining/InlineAccessors.java                                                         linux-aarch64,linux-x64
 compiler/inlining/PrintInlining.java                                                           linux-aarch64,linux-x64
 compiler/interpreter/Test6833129.java                                                          linux-aarch64,linux-x64
