@@ -202,6 +202,7 @@ jdk/javadoc/tool/nonConstExprs/Test.java                                        
 jdk/javadoc/tool/sourceOption/SourceOption.java                                                     linux-x64
 jdk/javadoc/doclet/DocRootSlash/DocRootSlash.java                                                   linux-x64
 jdk/javadoc/doclet/dupThrowsTags/TestDupThrowsTags.java                                             linux-x64
+jdk/javadoc/doclet/InheritDocForUserTags/DocTest.java                                               linux-x64
 jdk/jshell/AnalyzeSnippetTest.java                                                                  linux-x64
 jdk/jshell/ClassPathTest.java                                                                       linux-x64
 jdk/jshell/CommandCompletionTest.java                                                               linux-aarch64,linux-x64
