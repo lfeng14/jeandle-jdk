@@ -1000,6 +1000,7 @@ jdk/jshell/WrapperTest.java                                                     
 jdk/javadoc/testJavadocTester/TestJavadocTester.java                                                      linux-x64
 jdk/javadoc/testJavadocTester/TestJavadocTesterCrash.java                                                 linux-x64
 jdk/javadoc/testJavadocTester/TestRunTests.java                                                           linux-x64
+jdk/javadoc/testTFMBuilder/TestTFMBuilder.java                                                            linux-x64
 tools/EnumAccessible.java                                                                                 linux-x64
 tools/doclint/EmptyPreTest.java                                                                           linux-x64
 tools/doclint/RecordCompactConstructorTest.java                                                           linux-x64
