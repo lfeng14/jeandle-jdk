@@ -997,9 +997,9 @@ jdk/jshell/UnnamedTest.java                                                     
 jdk/jshell/UserExecutionControlTest.java                                                                  linux-x64
 jdk/jshell/VariablesTest.java                                                                             linux-x64
 jdk/jshell/WrapperTest.java                                                                               linux-x64
-test/langtools/jdk/javadoc/testJavadocTester/TestJavadocTester.java                                       linux-x64
-test/langtools/jdk/javadoc/testJavadocTester/TestJavadocTesterCrash.java                                  linux-x64
-test/langtools/jdk/javadoc/testJavadocTester/TestRunTests.java                                            linux-x64
+jdk/javadoc/testJavadocTester/TestJavadocTester.java                                                      linux-x64
+jdk/javadoc/testJavadocTester/TestJavadocTesterCrash.java                                                 linux-x64
+jdk/javadoc/testJavadocTester/TestRunTests.java                                                           linux-x64
 tools/EnumAccessible.java                                                                                 linux-x64
 tools/doclint/EmptyPreTest.java                                                                           linux-x64
 tools/doclint/RecordCompactConstructorTest.java                                                           linux-x64
