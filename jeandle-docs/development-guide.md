@@ -59,4 +59,6 @@ Date:   <Date Info>
     Signed-off-by: <User Name> <user@example.com>
 ```
 
-Note: The jeandle-llvm CI pipeline only compiles and tests jeandle-llvm itself. Therefore, commits within the jeandle-llvm repository are not required to specify any dependency on a jeandle-jdk branch.
+### Cross-Repository Testing
+
+The jeandle-llvm CI can also trigger jeandle-jdk tests via the GitHub Actions `repository_dispatch` event, allowing testing of changes that may affect the JDK. If you want to disable this trigger for a PR, add the label `jdk-dependent` to the jeandle-llvm pull request.
