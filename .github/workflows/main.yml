@@ -66,9 +66,9 @@ jobs:
       - name: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.id }}
         run: |
           if [ "${{ github.event_name }}" = 'repository_dispatch' ]; then
-            echo "run identifier ${{ github.event.client_payload.id }}"
+            echo "run identifier: ${{ github.event.client_payload.id }}"
           else
-            echo "run identifier pull_request"
+            echo "run identifier: pull_request"
           fi
   ###
   ### Build jobs
