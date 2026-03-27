@@ -71,6 +71,9 @@ public class TestCosDouble {
         checker.checkNext("bci_0:");
         checker.checkNext("call double @StubRoutines_dcos");
         checker.checkNext("ret double");
+        // check gc-leaf-function
+        checker.checkPattern("declare double @StubRoutines_dcos.*#\\d+");
+        checker.checkPattern("attributes #\\d+ = \\{ \"gc-leaf-function\" \\}");
 
         // intrinsic by SharedRuntime
         if (is_x86) {
@@ -79,6 +82,17 @@ public class TestCosDouble {
             if (!Files.exists(tmp2)) {
                 Files.createDirectory(tmp2);
             }
+
+            command_args = new ArrayList<String>(List.of(
+                "-Xbatch", "-XX:-TieredCompilation", "-XX:+UseJeandleCompiler", "-Xcomp",
+                "-Xlog:jeandle=debug", "-XX:+ForceUnreachable",
+                "-XX:CompileCommand=compileonly,"+TestWrapper.class.getName()+"::cos_double",
+                "-XX:+UnlockDiagnosticVMOptions", "-XX:-UseLibmIntrinsic", "-XX:+JeandleUseHotspotIntrinsics",
+                TestWrapper.class.getName()));
+            pb = ProcessTools.createLimitedTestJavaProcessBuilder(command_args);
+            output = ProcessTools.executeCommand(pb);
+            output.shouldHaveExitValue(0)
+                .shouldContain("Method `static jdouble java.lang.Math.cos(jdouble)` is parsed as intrinsic");
 
             command_args = new ArrayList<String>(List.of(
                 "-Xbatch", "-XX:-TieredCompilation", "-XX:+UseJeandleCompiler", "-Xcomp",
@@ -99,8 +113,10 @@ public class TestCosDouble {
             checker.checkNext("entry:");
             checker.checkNext("br label %bci_0");
             checker.checkNext("bci_0:");
-            checker.checkNext("call double @SharedRuntime_dcos");
+            // check gc-leaf-function
+            checker.checkNextPattern("call double inttoptr \\(i64 (\\d+) to ptr\\).*#\\d+");
             checker.checkNext("ret double");
+            checker.checkPattern("attributes #\\d+ = \\{ \"gc-leaf-function\" \\}");
         }
     }
 

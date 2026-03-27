@@ -53,7 +53,7 @@ class JeandleCompilation : public StackObj {
                      ciEnv* env,
                      std::unique_ptr<llvm::LLVMContext> context,
                      const char* name,
-                     address c_func,
+                     address routine_address,
                      llvm::FunctionType* func_type);
 
   ~JeandleCompilation() = default;
@@ -70,6 +70,8 @@ class JeandleCompilation : public StackObj {
   static void report_jeandle_error(const char* msg) { JeandleCompilation::current()->report_error(msg); }
   static bool jeandle_error_occurred() { return JeandleCompilation::current()->error_occurred(); }
   static void print_timers();
+
+  void set_has_monitors(bool v) { _has_monitors = v; }
 
   JeandleCompiledCode* compiled_code() { return &_code; }
 
@@ -93,6 +95,8 @@ class JeandleCompilation : public StackObj {
 
   const char* _error_msg;
 
+  bool _has_monitors;
+
   const char* check_can_parse(ciMethod* method);
 
   void initialize();
@@ -110,7 +114,8 @@ class JeandleCompilation : public StackObj {
 #define JEANDLE_CRASH_ON_ERROR(_error_msg)                            \
 do {                                                                  \
   if (JeandleCrashOnError) {                                          \
-    fatal("Compilation failed in '%s': %s", JeandleCompilation::current()->name().c_str(), _error_msg); \
+    fatal("Compilation failed in '%s': %s",                           \
+      JeandleCompilation::current()->name().c_str(), _error_msg);     \
   }                                                                   \
 } while (0)
 #else
@@ -133,6 +138,18 @@ do {                                                                  \
     JEANDLE_CRASH_ON_ERROR(msg);                                      \
     return return_val;                                                \
   }                                                                   \
+} while (0)
+
+#define JEANDLE_REPORT_ERROR_AND_RET_VOID(msg)                        \
+do {                                                                  \
+  JeandleCompilation::report_jeandle_error(msg);                      \
+  return;                                                             \
+} while (0)
+
+#define JEANDLE_REPORT_ERROR_AND_RET(msg, return_val)                 \
+do {                                                                  \
+  JeandleCompilation::report_jeandle_error(msg);                      \
+  return return_val;                                                  \
 } while (0)
 
 #define RETURN_VOID_ON_JEANDLE_ERROR()                                \

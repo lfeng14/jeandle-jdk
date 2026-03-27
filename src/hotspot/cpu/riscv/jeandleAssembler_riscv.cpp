@@ -52,6 +52,10 @@ void JeandleAssembler::emit_verified_entry() {
   Unimplemented();
 }
 
+void JeandleAssembler::emit_clinit_barrier_on_entry(Klass* klass) {
+  Unimplemented();
+}
+
 int JeandleAssembler::interior_entry_alignment() const {
   Unimplemented();
   return 0;
@@ -62,11 +66,15 @@ int JeandleAssembler::emit_exception_handler() {
   return 0;
 }
 
-void JeandleAssembler::emit_const_reloc(int operand_offset, LinkKind kind, int64_t addend, address target) {
+void JeandleAssembler::emit_section_word_reloc(int operand_offset, LinkKind kind, int64_t addend, address target, int reloc_section) {
   Unimplemented();
 }
 
-void JeandleAssembler::emit_oop_reloc(int offset, jobject oop_handle) {
+void JeandleAssembler::emit_oop_reloc(int offset, jobject oop_handle, int64_t addend) {
+  Unimplemented();
+}
+
+void JeandleAssembler::emit_oop_addr_reloc(int offset, jobject oop_handle) {
   Unimplemented();
 }
 
@@ -78,6 +86,11 @@ bool JeandleAssembler::is_oop_reloc(LinkSymbol& target, LinkKind kind) {
   Unimplemented();
 }
 
+bool JeandleAssembler::is_oop_addr_reloc(LinkSymbol& target, LinkKind kind) {
+  // Unimplemented
+  return false;
+}
+
 bool JeandleAssembler::is_routine_call_reloc(LinkSymbol& target, LinkKind kind) {
   Unimplemented();
 }
@@ -86,6 +99,6 @@ bool JeandleAssembler::is_external_call_reloc(LinkSymbol& target, LinkKind kind)
   Unimplemented();
 }
 
-bool JeandleAssembler::is_const_reloc(LinkSymbol& target, LinkKind kind) {
+bool JeandleAssembler::is_section_word_reloc(LinkSymbol& target, LinkKind kind) {
   Unimplemented();
 }

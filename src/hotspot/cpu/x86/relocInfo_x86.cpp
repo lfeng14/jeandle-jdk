@@ -143,18 +143,21 @@ void Relocation::pd_set_call_destination(address x) {
   }
 }
 
-void Relocation::pd_set_jeandle_data_value(address x, bool verify_only) {
+void Relocation::pd_set_jeandle_data_value(address x, int addend, bool verify_only) {
 #ifdef AMD64
   typedef Assembler::WhichOperand WhichOperand;
   WhichOperand which = (WhichOperand) format();
   assert(which == Assembler::disp32_operand, "format unpacks ok");
   // The address resolved from the jeandle-generated ELF file corresponds to the address of an operand.
   address disp = addr();
-  address next_ip = disp + sizeof(int32_t);
   if (verify_only) {
-    guarantee(*(int32_t*) disp == (x - next_ip), "instructions must match");
+    guarantee(*(int32_t*) disp == (x - disp + addend), "instructions must match");
   } else {
-    *(int32_t*) disp = x - next_ip;
+    // Quoted from llvm::jitlink::x86_64::EdgeKind_x86_64::Delta32:  "Fixup <- Target - Fixup + Addend"
+    // disp:   Fixup
+    // x:      Target
+    // addend: Addend
+    *(int32_t*) disp = x - disp + addend;
   }
 #else
   Unimplemented();
@@ -218,3 +221,7 @@ void trampoline_stub_Relocation::pd_fix_owner_after_move() {
   nativeCall_at(_owner)->set_destination(trampoline);
 }
 #endif // JEANDLE
+
+void jeandle_oop_addr_Relocation::fix_relocation_after_move(const CodeBuffer* src, CodeBuffer* dest) {
+  Unimplemented();
+}

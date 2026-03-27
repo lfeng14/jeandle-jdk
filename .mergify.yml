@@ -36,11 +36,25 @@ merge_protections:
 queue_rules:
   - queue_branch_prefix: jeandle-jdk/merge-queue/
     merge_method: squash
-    autoqueue: true
     update_method: rebase
     name: jeandle-jdk
-    draft_bot_account: ""
-    merge_bot_account: ""
+    draft_bot_account: jeandle-bot
+    merge_bot_account: jeandle-bot
     update_bot_account: jeandle-bot
 merge_queue:
   max_parallel_checks: 1
+  queued_label: ""
+  dequeued_label: ""
+commands_restrictions:
+  dequeue:
+    conditions:
+      - sender-permission >= maintain
+  queue:
+    conditions:
+      - sender-permission >= maintain
+  requeue:
+    conditions:
+      - sender-permission >= maintain
+  unqueue:
+    conditions:
+      - sender-permission >= maintain

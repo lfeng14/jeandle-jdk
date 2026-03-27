@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, the Jeandle-JDK Authors. All Rights Reserved.
+ * Copyright (c) 2025, 2026, the Jeandle-JDK Authors. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,6 +39,7 @@
 #include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "asm/codeBuffer.hpp"
 #include "ci/ciEnv.hpp"
+#include "ci/ciField.hpp"
 #include "ci/ciMethod.hpp"
 #include "code/exceptionHandlerTable.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -57,7 +58,7 @@ public:
   };
   DeoptValueEncoding(int index, DeoptValueType value_type, BasicType basic_type):
     _index(index), _value_type(value_type), _basic_type(basic_type) {
-    assert(_value_type == LocalType || _value_type == StackType, "Unsupported value type");
+    assert(_value_type == LocalType || _value_type == StackType || _value_type == MonitorType, "Unsupported value type");
   }
 
   uint64_t encode() {
@@ -105,12 +106,10 @@ class CallSiteInfo : public JeandleCompilationResourceObj {
   CallSiteInfo(JeandleCompiledCall::Type type,
                address target,
                int bci,
-               bool has_deopt_operands = false,
                uint64_t statepoint_id = llvm::StatepointDirectives::DefaultStatepointID) :
                _type(type),
                _target(target),
                _bci(bci),
-               _has_deopt_operands(has_deopt_operands),
                _statepoint_id(statepoint_id) {
 #ifdef ASSERT
     // We don't need to assign a unique statepoint id for each routine call site, only call type and target is used.
@@ -128,33 +127,33 @@ class CallSiteInfo : public JeandleCompilationResourceObj {
   JeandleCompiledCall::Type type() const { return _type; }
   uint64_t statepoint_id() const { return _statepoint_id; }
   address target() const { return _target; }
-  bool has_deopt_operands() const { return _has_deopt_operands; }
 
  private:
   JeandleCompiledCall::Type _type;
   address _target;
   int _bci;
-  bool _has_deopt_operands;
 
   // Used to distinguish each call site in stackmaps.
   uint64_t _statepoint_id;
 };
 
-class JeandleOopMap {
+class JeandleStackMap {
 public:
-  JeandleOopMap(OopMap* oop_map, GrowableArray<ScopeValue*>* locals, GrowableArray<ScopeValue*>* stack, bool reexecute) :
-      _oop_map(oop_map), _locals(locals), _stack(stack), _reexecute(reexecute) {
+  JeandleStackMap(OopMap* oop_map, GrowableArray<ScopeValue*>* locals, GrowableArray<ScopeValue*>* stack, GrowableArray<MonitorValue*>* monitors, bool reexecute) :
+      _oop_map(oop_map), _locals(locals), _stack(stack), _monitors(monitors), _reexecute(reexecute) {
   }
 
   OopMap* oop_map() const { return _oop_map; }
   GrowableArray<ScopeValue*>* locals() const { return _locals; }
   GrowableArray<ScopeValue*>* stack() const { return _stack; }
+  GrowableArray<MonitorValue*>* monitors() const { return _monitors; }
   bool reexecute() const { return _reexecute; }
 
 private:
   OopMap* _oop_map;
   GrowableArray<ScopeValue*>* _locals;
   GrowableArray<ScopeValue*>* _stack;
+  GrowableArray<MonitorValue*>* _monitors;
   bool _reexecute;
 };
 
@@ -180,7 +179,8 @@ class JeandleCompiledCode : public StackObj {
                       _env(env),
                       _method(method),
                       _routine_entry(nullptr),
-                      _func_name(JeandleFuncSig::method_name(_method)) {}
+                      _func_name(JeandleFuncSig::method_name_with_signature(_method)),
+                      _interpreter_frame_size_in_bytes(0) {}
 
   // For compiled Jeandle runtime stubs.
   JeandleCompiledCode(ciEnv* env, const char* func_name) :
@@ -192,7 +192,8 @@ class JeandleCompiledCode : public StackObj {
                       _env(env),
                       _method(nullptr),
                       _routine_entry(nullptr),
-                      _func_name(func_name) {}
+                      _func_name(func_name),
+                      _interpreter_frame_size_in_bytes(0) {}
 
   void install_obj(std::unique_ptr<ObjectBuffer> obj);
 
@@ -220,6 +221,13 @@ class JeandleCompiledCode : public StackObj {
   // Generate relocations, stubs and debug information.
   void finalize();
 
+  bool needs_clinit_barrier(ciField* ik,         ciMethod* accessing_method);
+  bool needs_clinit_barrier(ciMethod* ik,        ciMethod* accessing_method);
+  bool needs_clinit_barrier(ciInstanceKlass* ik, ciMethod* accessing_method);
+  bool needs_clinit_barrier_on_entry();
+  void update_interpreter_frame_size_in_bytes(int frame_size) { _interpreter_frame_size_in_bytes = MAX2(frame_size, _interpreter_frame_size_in_bytes); }
+  int interpreter_frame_size_in_bytes() { return _interpreter_frame_size_in_bytes; }
+
  private:
   std::unique_ptr<ObjectBuffer> _obj; // Compiled instructions.
   std::unique_ptr<ELFObject> _elf;
@@ -245,6 +253,7 @@ class JeandleCompiledCode : public StackObj {
   ciMethod* _method;
   address _routine_entry;
   std::string _func_name;
+  int _interpreter_frame_size_in_bytes;
 
   void setup_frame_size();
 
@@ -254,9 +263,12 @@ class JeandleCompiledCode : public StackObj {
   address lookup_const_section(llvm::StringRef name, JeandleAssembler& assembler);
   address resolve_const_edge(LinkBlock& block, LinkEdge& edge, JeandleAssembler& assembler);
 
-  JeandleOopMap* build_oop_map(StackMapParser& stackmaps, StackMapParser::record_iterator& record, CallSiteInfo* call_info);
-  void fill_one_scope_value(const StackMapParser& stackmaps, const DeoptValueEncoding& encode, const StackMapParser::LocationAccessor& location,
-                            GrowableArray<ScopeValue*>* array, int& current_index);
+  JeandleStackMap* parse_stackmap(StackMapParser& stackmaps, StackMapParser::record_iterator& record, CallSiteInfo* call_info);
+  LocationValue* new_location_value(const StackMapParser::LocationAccessor& location, Location::Type type);
+  void fill_one_scope_value(const StackMapParser& stackmaps, const DeoptValueEncoding& encode,
+                            const StackMapParser::LocationAccessor& location, GrowableArray<ScopeValue*>* array);
+  void fill_one_monitor_value(const StackMapParser& stackmaps, const DeoptValueEncoding& encode, const StackMapParser::LocationAccessor& object,
+                              const StackMapParser::LocationAccessor& lock, GrowableArray<MonitorValue*>* array);
 
   void build_exception_handler_table();
   void build_implicit_exception_table();
@@ -273,7 +285,8 @@ public:
   }
 
   static bool is_stack(const StackMapParser::LocationAccessor& location) {
-    return location.getKind() == StackMapParser::LocationKind::Indirect;
+    return location.getKind() == StackMapParser::LocationKind::Indirect
+        || location.getKind() == StackMapParser::LocationKind::Direct;
   }
 
   static bool is_register(const StackMapParser::LocationAccessor& location) {
@@ -287,7 +300,7 @@ public:
       ShouldNotReachHere();
     }
   }
-  
+
   static uint32_t getConstantUint(const StackMapParser& parser, const StackMapParser::LocationAccessor& location);
   static uint64_t getConstantUlong(const StackMapParser& parser, const StackMapParser::LocationAccessor& location);
   static float    getConstantFloat(const StackMapParser& parser, const StackMapParser::LocationAccessor& location);

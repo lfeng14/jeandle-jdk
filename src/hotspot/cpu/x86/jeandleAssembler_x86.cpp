@@ -38,7 +38,9 @@ void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call
 
   int stub_size = 28;
   address stub = __ start_a_stub(stub_size);
-  JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(stub != nullptr, "static call stub overflow");
+  if (stub == nullptr) {
+    JEANDLE_REPORT_ERROR_AND_RET_VOID("static call stub overflow");
+  }
 
   int start = __ offset();
 
@@ -121,7 +123,9 @@ void JeandleAssembler::patch_external_call_site(int inst_offset, CallSiteInfo* c
   // we need to confirm that stub code section has enough space before invoking `set_insts_end`.
   int required_space = __ max_trampoline_stub_size();
   if (__ code()->stubs()->maybe_expand_to_ensure_remaining(required_space)) {
-    JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(__ code()->blob() != nullptr, "trampoline stub overflow");
+    if (__ code()->blob() == nullptr) {
+      JEANDLE_REPORT_ERROR_AND_RET_VOID("trampoline stub overflow");
+    }
   }
 
   address call_address = __ addr_at(inst_offset);
@@ -136,7 +140,9 @@ void JeandleAssembler::patch_external_call_site(int inst_offset, CallSiteInfo* c
 
   // Patch.
   address tpc = __ trampoline_call(AddressLiteral(call->target(), relocInfo::none));
-  JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(tpc != nullptr, "trampoline stub overflow");
+  if (tpc == nullptr) {
+    JEANDLE_REPORT_ERROR_AND_RET_VOID("trampoline stub overflow");
+  }
 
   // Recover insts_end.
   __ code()->set_insts_end(__ code()->insts_begin() + insts_end_offset);
@@ -189,22 +195,34 @@ int JeandleAssembler::emit_exception_handler() {
 
 using LinkKind_x86_64 = llvm::jitlink::x86_64::EdgeKind_x86_64;
 
-void JeandleAssembler::emit_const_reloc(int operand_offset, LinkKind kind, int64_t addend, address target) {
+void JeandleAssembler::emit_section_word_reloc(int operand_offset, LinkKind kind, int64_t addend, address target, int reloc_section) {
   assert(operand_offset >= 0, "invalid operand address");
   assert(kind == LinkKind_x86_64::Delta32, "invalid link kind");
 
-  address at_address = __ code()->insts_begin() + operand_offset;
-  address reloc_target = target + addend + sizeof(int32_t);
-  RelocationHolder rspec = jeandle_section_word_Relocation::spec(reloc_target, CodeBuffer::SECT_CONSTS);
+  if (reloc_section == CodeBuffer::SECT_INSTS) {
+    address at_address = __ code()->insts_begin() + operand_offset;
 
+    RelocationHolder rspec = jeandle_section_word_Relocation::spec(target, CodeBuffer::SECT_CONSTS, addend);
+
+    __ code()->insts()->relocate(at_address, rspec, __ disp32_operand);
+  } else {
+    assert(reloc_section == CodeBuffer::SECT_CONSTS, "unexpected code section");
+    address at_address = __ code()->consts()->start() + operand_offset;
+    RelocationHolder rspec = jeandle_section_word_Relocation::spec(target, CodeBuffer::SECT_INSTS, addend);
+
+    __ code()->consts()->relocate(at_address, rspec, __ disp32_operand);
+  }
+}
+
+void JeandleAssembler::emit_oop_reloc(int offset, jobject oop_handle, int64_t addend) {
+  int index = __ oop_recorder()->find_index(oop_handle);
+  RelocationHolder rspec = jeandle_oop_Relocation::spec(index, addend);
+  address at_address = __ code()->insts_begin() + offset;
   __ code_section()->relocate(at_address, rspec, __ disp32_operand);
 }
 
-void JeandleAssembler::emit_oop_reloc(int offset, jobject oop_handle) {
-  int index = __ oop_recorder()->find_index(oop_handle);
-  RelocationHolder rspec = jeandle_oop_Relocation::spec(index);
-  address at_address = __ code()->insts_begin() + offset;
-  __ code_section()->relocate(at_address, rspec, __ disp32_operand);
+void JeandleAssembler::emit_oop_addr_reloc(int offset, jobject oop_handle) {
+  Unimplemented();
 }
 
 int JeandleAssembler::fixup_call_inst_offset(int offset) {
@@ -214,6 +232,11 @@ int JeandleAssembler::fixup_call_inst_offset(int offset) {
 
 bool JeandleAssembler::is_oop_reloc(LinkSymbol& target, LinkKind kind) {
   return !target.isDefined() && kind == LinkKind_x86_64::Delta32;
+}
+
+bool JeandleAssembler::is_oop_addr_reloc(LinkSymbol& target, LinkKind kind) {
+  // Unimplemented
+  return false;
 }
 
 bool JeandleAssembler::is_routine_call_reloc(LinkSymbol& target, LinkKind kind) {
@@ -230,6 +253,6 @@ bool JeandleAssembler::is_external_call_reloc(LinkSymbol& target, LinkKind kind)
          kind == LinkKind_x86_64::BranchPCRel32;
 }
 
-bool JeandleAssembler::is_const_reloc(LinkSymbol& target, LinkKind kind) {
+bool JeandleAssembler::is_section_word_reloc(LinkSymbol& target, LinkKind kind) {
   return target.isDefined() && kind == LinkKind_x86_64::Delta32;
 }

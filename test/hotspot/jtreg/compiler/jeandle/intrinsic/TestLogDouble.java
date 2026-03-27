@@ -64,7 +64,7 @@ public class TestLogDouble {
         // Verify llvm IR
         FileCheck checker = new FileCheck(dump_path, TestWrapper.class.getMethod("log_double", double.class), false);
         // find compiled method
-        checker.check("define hotspotcc double @\"compiler_jeandle_intrinsic_TestLogDouble$TestWrapper_log_double\"(double %0)");
+        checker.checkPattern("define hotspotcc double .*compiler_jeandle_intrinsic_TestLogDouble\\$TestWrapper_log_double.*(double %0)");
         // check IR
         checker.checkNext("entry:");
         checker.checkNext("br label %bci_0");
@@ -72,9 +72,14 @@ public class TestLogDouble {
         if (is_x86) {
             checker.checkNext("call double @StubRoutines_dlog");
         } else {
-            checker.checkNext("call double @SharedRuntime_dlog");
+            checker.checkNextPattern("call double inttoptr \\(i64 (\\d+) to ptr\\).*#\\d+");
         }
         checker.checkNext("ret double");
+        // check gc-leaf-function
+        if (is_x86) {
+            checker.checkPattern("declare double @StubRoutines_dlog.*#\\d+");
+        }
+        checker.checkPattern("attributes #\\d+ = \\{ \"gc-leaf-function\" \\}");
 
         // intrinsic by SharedRuntime
         if (is_x86) {
@@ -83,6 +88,17 @@ public class TestLogDouble {
             if (!Files.exists(tmp2)) {
                 Files.createDirectory(tmp2);
             }
+
+            command_args = new ArrayList<String>(List.of(
+                "-Xbatch", "-XX:-TieredCompilation", "-XX:+UseJeandleCompiler", "-Xcomp",
+                "-Xlog:jeandle=debug", "-XX:+ForceUnreachable",
+                "-XX:CompileCommand=compileonly,"+TestWrapper.class.getName()+"::log_double",
+                "-XX:+UnlockDiagnosticVMOptions", "-XX:-UseLibmIntrinsic", "-XX:+JeandleUseHotspotIntrinsics",
+                TestWrapper.class.getName()));
+            pb = ProcessTools.createLimitedTestJavaProcessBuilder(command_args);
+            output = ProcessTools.executeCommand(pb);
+            output.shouldHaveExitValue(0)
+                .shouldContain("Method `static jdouble java.lang.Math.log(jdouble)` is parsed as intrinsic");
 
             command_args = new ArrayList<String>(List.of(
                 "-Xbatch", "-XX:-TieredCompilation", "-XX:+UseJeandleCompiler", "-Xcomp",
@@ -98,13 +114,15 @@ public class TestLogDouble {
             // Verify llvm IR
             checker = new FileCheck(dump_path, TestWrapper.class.getMethod("log_double", double.class), false);
             // find compiled method
-            checker.check("define hotspotcc double @\"compiler_jeandle_intrinsic_TestLogDouble$TestWrapper_log_double\"(double %0)");
+            checker.checkPattern("define hotspotcc double .*compiler_jeandle_intrinsic_TestLogDouble\\$TestWrapper_log_double.*(double %0)");
             // check IR
             checker.checkNext("entry:");
             checker.checkNext("br label %bci_0");
             checker.checkNext("bci_0:");
-            checker.checkNext("call double @SharedRuntime_dlog");
+            // check gc-leaf-function
+            checker.checkNextPattern("call double inttoptr \\(i64 (\\d+) to ptr\\).*#\\d+");
             checker.checkNext("ret double");
+            checker.checkPattern("attributes #\\d+ = \\{ \"gc-leaf-function\" \\}");
         }
     }
 

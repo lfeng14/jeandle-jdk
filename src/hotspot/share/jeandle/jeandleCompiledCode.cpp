@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, the Jeandle-JDK Authors. All Rights Reserved.
+ * Copyright (c) 2025, 2026, the Jeandle-JDK Authors. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -68,47 +68,66 @@ class JeandleReloc {
 
   void  operator delete(void* p) {} // nothing to do
 
-#ifdef ASSERT
  protected:
-  bool _fixed_up = false;
-#endif
-
- private:
   // Need fixing up with the prolog length.
   int _offset;
+#ifdef ASSERT
+  bool _fixed_up = false;
+#endif
 };
 
-class JeandleConstReloc : public JeandleReloc {
+class JeandleSectionWordReloc : public JeandleReloc {
  public:
-  JeandleConstReloc(LinkBlock& block, LinkEdge& edge, address target) :
-    JeandleReloc(static_cast<int>(block.getAddress().getValue() + edge.getOffset())),
+  JeandleSectionWordReloc(int reloc_offset, LinkEdge& edge, address target, int reloc_section) :
+    JeandleReloc(reloc_offset),
     _kind(edge.getKind()),
     _addend(edge.getAddend()),
-    _target(target) {}
+    _target(target),
+    _reloc_section(reloc_section) {}
 
   void emit_reloc(JeandleAssembler& assembler) override {
-    assembler.emit_const_reloc(offset(), _kind, _addend, _target);
+    assembler.emit_section_word_reloc(offset(), _kind, _addend, _target, _reloc_section);
+  }
+
+  virtual void fixup_offset(int prolog_length) {
+    if (_reloc_section == CodeBuffer::SECT_INSTS) {
+      _offset += prolog_length;
+    } else {
+      assert(_reloc_section == CodeBuffer::SECT_CONSTS, "unexpected code section");
+      _target += prolog_length;
+    }
+#ifdef ASSERT
+    _fixed_up = true;
+#endif
   }
 
  private:
   LinkKind _kind;
   int64_t _addend;
   address _target;
+  int _reloc_section;
 };
 
 class JeandleCallReloc : public JeandleReloc {
  public:
-  JeandleCallReloc(int inst_end_offset, ciEnv* env, ciMethod* method, JeandleOopMap* oop_map, CallSiteInfo* call) :
+  JeandleCallReloc(int inst_end_offset, ciEnv* env, ciMethod* method, JeandleStackMap* stack_map, CallSiteInfo* call) :
     JeandleReloc(inst_end_offset - JeandleCompiledCall::call_site_size(call->type()) /* beginning of a call instruction */),
-    _env(env), _method(method), _oop_map(oop_map), _call(call) {}
+    _env(env), _method(method), _stack_map(stack_map), _call(call) {}
 
   void emit_reloc(JeandleAssembler& assembler) override {
+#ifdef ASSERT
     // Each call reloc has an oopmap, except for EXTERNAL_CALL.
-    assert((_call->type() != JeandleCompiledCall::EXTERNAL_CALL && _oop_map != nullptr) ||
-           (_call->type() == JeandleCompiledCall::EXTERNAL_CALL && _oop_map == nullptr),
-           "unmatched call type and oopmap");
-    if (_oop_map != nullptr) {
-      process_oop_map();
+    if (_call->type() == JeandleCompiledCall::ROUTINE_CALL) {
+      bool is_gc_leaf = JeandleRuntimeRoutine::is_gc_leaf(_call->target());
+      assert(is_gc_leaf == (_stack_map == nullptr), "unmatched call type and oopmap");
+    } else if (_call->type() == JeandleCompiledCall::EXTERNAL_CALL) {
+      assert(_stack_map == nullptr, "unmatched call type and oopmap");
+    } else {
+      assert(_stack_map != nullptr, "unmatched call type and oopmap");
+    }
+#endif // ASSERT
+    if (_stack_map != nullptr) {
+      process_stack_map();
     }
 
     switch (_call->type()) {
@@ -133,7 +152,7 @@ class JeandleCallReloc : public JeandleReloc {
         break;
 
       case JeandleCompiledCall::EXTERNAL_CALL:
-        assert(_oop_map == nullptr, "no oopmap in external call");
+        assert(_stack_map == nullptr, "no oopmap in external call");
         assembler.patch_external_call_site(offset(), _call);
         RETURN_VOID_ON_JEANDLE_ERROR();
         break;
@@ -146,30 +165,27 @@ class JeandleCallReloc : public JeandleReloc {
  private:
   ciEnv* _env;
   ciMethod* _method;
-  JeandleOopMap* _oop_map;
+  JeandleStackMap* _stack_map;
   CallSiteInfo* _call;
   int inst_end_offset() { return offset() + JeandleCompiledCall::call_site_size(_call->type()); }
 
-  void process_oop_map() {
-    assert(_oop_map != nullptr, "oopmap must be initialized");
+  void process_stack_map() {
+    assert(_stack_map != nullptr, "oopmap must be initialized");
     assert(inst_end_offset() >= 0, "pc offset must be initialized");
     assert(_fixed_up, "offset must be fixed up");
 
     DebugInformationRecorder* recorder = _env->debug_info();
-    recorder->add_safepoint(inst_end_offset(), _oop_map->oop_map());
+    recorder->add_safepoint(inst_end_offset(), _stack_map->oop_map());
 
-    // No monitor support now.
-    GrowableArray<MonitorValue*> *monarray = new GrowableArray<MonitorValue*>(0);
-
-    DebugToken *locvals = recorder->create_scope_values(_oop_map->locals());
-    DebugToken *expvals = recorder->create_scope_values(_oop_map->stack());
-    DebugToken *monvals = recorder->create_monitor_values(monarray);
+    DebugToken *locvals = recorder->create_scope_values(_stack_map->locals());
+    DebugToken *expvals = recorder->create_scope_values(_stack_map->stack());
+    DebugToken *monvals = recorder->create_monitor_values(_stack_map->monitors());
 
     recorder->describe_scope(inst_end_offset(),
                              methodHandle(),
                              _method,
                              _call->bci(),
-                             _oop_map->reexecute(),
+                             _stack_map->reexecute(),
                              false,
                              false,
                              false,
@@ -185,12 +201,37 @@ class JeandleCallReloc : public JeandleReloc {
 
 class JeandleOopReloc : public JeandleReloc {
  public:
-  JeandleOopReloc(int offset, jobject oop_handle) :
+  JeandleOopReloc(int offset, jobject oop_handle, int64_t addend) :
+    JeandleReloc(offset),
+    _oop_handle(oop_handle),
+    _addend(addend) {}
+
+  void emit_reloc(JeandleAssembler& assembler) override {
+    assembler.emit_oop_reloc(offset(), _oop_handle, _addend);
+  }
+
+ private:
+  jobject _oop_handle;
+  int64_t _addend;
+};
+
+class JeandleOopAddrReloc : public JeandleReloc {
+ public:
+  JeandleOopAddrReloc(int offset, jobject oop_handle) :
     JeandleReloc(offset),
     _oop_handle(oop_handle) {}
 
   void emit_reloc(JeandleAssembler& assembler) override {
-    assembler.emit_oop_reloc(offset(), _oop_handle);
+    assembler.emit_oop_addr_reloc(offset(), _oop_handle);
+  }
+
+  void fixup_offset(int prolog_length) override {
+  // This relocation resides in the const section, so the offset does not
+  // need to be adjusted by the instruction section's prolog length.
+  // The _fixed_up flag is set solely for assertion checks in debug builds.
+#ifdef ASSERT
+    _fixed_up = true;
+#endif
   }
 
  private:
@@ -212,8 +253,49 @@ static bool need_stack_overflow_check(bool is_method_compilation,
          frame_size_in_bytes > (int)(os::vm_page_size() >> 3) DEBUG_ONLY(|| true);
 }
 
-static bool need_clinit_barrier_on_entry(ciMethod* method) {
-  return VM_Version::supports_fast_class_init_checks() && method->needs_clinit_barrier();
+bool JeandleCompiledCode::needs_clinit_barrier_on_entry() {
+  if (_method == nullptr) {
+    return false;
+  }
+  return VM_Version::supports_fast_class_init_checks() && _method->needs_clinit_barrier();
+}
+
+bool JeandleCompiledCode::needs_clinit_barrier(ciField* field, ciMethod* accessing_method) {
+  return field->is_static() && needs_clinit_barrier(field->holder(), accessing_method);
+}
+
+bool JeandleCompiledCode::needs_clinit_barrier(ciMethod* method, ciMethod* accessing_method) {
+  return method->is_static() && needs_clinit_barrier(method->holder(), accessing_method);
+}
+
+bool JeandleCompiledCode::needs_clinit_barrier(ciInstanceKlass* holder, ciMethod* accessing_method) {
+  if (holder->is_initialized()) {
+    return false;
+  }
+  if (holder->is_being_initialized()) {
+    if (accessing_method->holder() == holder) {
+      // Access inside a class. The barrier can be elided when access happens in <clinit>,
+      // <init>, or a static method. In all those cases, there was an initialization
+      // barrier on the holder klass passed.
+      if (accessing_method->is_static_initializer() ||
+          accessing_method->is_object_initializer() ||
+          accessing_method->is_static()) {
+        return false;
+      }
+    } else if (accessing_method->holder()->is_subclass_of(holder)) {
+      // Access from a subclass. The barrier can be elided only when access happens in <clinit>.
+      // In case of <init> or a static method, the barrier is on the subclass is not enough:
+      // child class can become fully initialized while its parent class is still being initialized.
+      if (accessing_method->is_static_initializer()) {
+        return false;
+      }
+    }
+    ciMethod* root = _method; // the root method of compilation
+    if (root != accessing_method) {
+      return needs_clinit_barrier(holder, root); // check access in the context of compilation root
+    }
+  }
+  return true;
 }
 
 void JeandleCompiledCode::install_obj(std::unique_ptr<ObjectBuffer> obj) {
@@ -246,6 +328,9 @@ void JeandleCompiledCode::finalize() {
                           sizeof(relocInfo) + relocInfo::length_limit,
                           128,
                           _env->oop_recorder());
+  if (_code_buffer.blob() == nullptr) {
+    JEANDLE_REPORT_ERROR_AND_RET_VOID("CodeCache is full");
+  }
   _code_buffer.initialize_consts_size(consts_size);
 
   // Initialize assembler.
@@ -263,7 +348,7 @@ void JeandleCompiledCode::finalize() {
   _offsets.set_value(CodeOffsets::Verified_Entry, masm->offset());
   assembler.emit_verified_entry();
 
-  if (_method && need_clinit_barrier_on_entry(_method)) {
+  if (needs_clinit_barrier_on_entry()) {
     Klass* klass = (Klass*)_method->holder()->constant_encoding();
     assembler.emit_clinit_barrier_on_entry(klass);
   }
@@ -271,10 +356,8 @@ void JeandleCompiledCode::finalize() {
   int frame_size_in_bytes = _frame_size * BytesPerWord;
   bool is_method_compilation = _method != nullptr;
   bool has_java_calls = !_non_routine_call_sites.empty();
-  if (need_stack_overflow_check(is_method_compilation, has_java_calls, frame_size_in_bytes)) {
-    // TODO: redesign interpreter frame sizing that comes from interpreter states recorded
-    // in stackmaps, which are only captured for uncommon traps (deoptimization paths).
-    int bang_size_in_bytes = frame_size_in_bytes + os::extra_bang_size_in_bytes();
+  int bang_size_in_bytes = MAX2(frame_size_in_bytes + os::extra_bang_size_in_bytes(), interpreter_frame_size_in_bytes());
+  if (need_stack_overflow_check(is_method_compilation, has_java_calls, bang_size_in_bytes)) {
     masm->generate_stack_overflow_check(bang_size_in_bytes);
   }
 
@@ -289,8 +372,9 @@ void JeandleCompiledCode::finalize() {
   RETURN_VOID_ON_JEANDLE_ERROR();
 
   // generate shared trampoline stubs
-  bool success = _code_buffer.finalize_stubs();
-  JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(success, "shared stub overflow");
+  if (!_code_buffer.finalize_stubs()) {
+    JEANDLE_REPORT_ERROR_AND_RET_VOID("shared stub overflow");
+  }
 
   if (_method) {
     // For Java method compilation.
@@ -317,8 +401,10 @@ void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
   auto link_graph = std::move(*graph_or_err);
 
   for (auto *block : link_graph->blocks()) {
-    // Only resolve relocations for instructions in the compiled method.
-    if (block->getSection().getName().compare(".text") != 0) {
+    // Resolve relocations in the compiled code and constant pool.
+    if (block->getSection().getName().compare(".text") != 0 &&
+        !block->getSection().getName().starts_with(".data.rel.ro") &&
+        !block->getSection().getName().starts_with(".rodata")) {
       continue;
     }
     for (auto& edge : block->edges()) {
@@ -332,11 +418,13 @@ void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
         int inst_end_offset = JeandleAssembler::fixup_call_inst_offset(static_cast<int>(block->getAddress().getValue() + edge.getOffset()));
 
         // TODO: Set the right bci.
-        // JeandleCallReloc for a routine call site will be created during stackmaps resolving because an oopmap is required.
-        _routine_call_sites[inst_end_offset] = new CallSiteInfo(JeandleCompiledCall::ROUTINE_CALL,
-                                                                target_addr,
-                                                                -1/* bci */,
-                                                                target_addr == JeandleRuntimeRoutine::get_routine_entry("uncommon_trap")/* has_deopt_operands */);
+        CallSiteInfo* call_info = new CallSiteInfo(JeandleCompiledCall::ROUTINE_CALL, target_addr, -1/* bci */);
+        if (JeandleRuntimeRoutine::is_gc_leaf(target_addr)) {
+          relocs.push_back(new JeandleCallReloc(inst_end_offset, _env, _method, nullptr /* no oopmap */, call_info));
+        } else {
+          // JeandleCallReloc for a non-gc-leaf routine call site will be created during stackmaps resolving because an oopmap is required.
+          _routine_call_sites[inst_end_offset] = call_info;
+        }
       } else if (JeandleAssembler::is_external_call_reloc(target, edge.getKind())) {
         // External call relocations.
         address target_addr = (address)DynamicLibrary::SearchForAddressOfSymbol(target_name.str().c_str());
@@ -345,23 +433,41 @@ void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
         int inst_end_offset = JeandleAssembler::fixup_call_inst_offset(static_cast<int>(block->getAddress().getValue() + edge.getOffset()));
 
         // TODO: Set the right bci.
-        CallSiteInfo* call_info = new CallSiteInfo(JeandleCompiledCall::EXTERNAL_CALL,
-                                                   target_addr,
-                                                   -1/* bci */);
+        CallSiteInfo* call_info = new CallSiteInfo(JeandleCompiledCall::EXTERNAL_CALL, target_addr, -1/* bci */);
         // LLVM doesn't rewrite intrinsic calls to statepoints, so we don't need oopmaps for external calls.
         relocs.push_back(new JeandleCallReloc(inst_end_offset, _env, _method, nullptr /* no oopmap */, call_info));
-      } else if (JeandleAssembler::is_const_reloc(target, edge.getKind())) {
+      } else if (JeandleAssembler::is_section_word_reloc(target, edge.getKind())) {
         // Const relocations.
-        assert(target.getSection().getName().starts_with(".rodata"), "invalid const section");
-        address target_addr = resolve_const_edge(*block, edge, assembler);
-        if (target_addr == nullptr) {
-          return;
+        address target_addr;
+        int reloc_offset;
+        int reloc_section;
+        if (target.getSection().getName().starts_with(".rodata") ||
+            target.getSection().getName().starts_with(".data.rel.ro")) {
+          assert(block->getSection().getName().compare(".text") == 0, "invalid reloc section");
+          target_addr = resolve_const_edge(*block, edge, assembler);
+          RETURN_VOID_ON_JEANDLE_ERROR();
+          reloc_offset = static_cast<int>(block->getAddress().getValue() + edge.getOffset());
+          reloc_section = CodeBuffer::SECT_INSTS;
+        } else {
+          assert(target.getSection().getName().compare(".text") == 0, "invalid target section");
+          assert(block->getSection().getName().starts_with(".rodata"), "invalid reloc section");
+          target_addr = _code_buffer.insts()->start();
+          address reloc_base = lookup_const_section(block->getSection().getName(), assembler);
+          RETURN_VOID_ON_JEANDLE_ERROR();
+          reloc_offset = reloc_base + edge.getOffset() - _code_buffer.consts()->start();
+          reloc_section = CodeBuffer::SECT_CONSTS;
         }
-        relocs.push_back(new JeandleConstReloc(*block, edge, target_addr));
+        relocs.push_back(new JeandleSectionWordReloc(reloc_offset, edge, target_addr, reloc_section));
       } else if (JeandleAssembler::is_oop_reloc(target, edge.getKind())) {
         // Oop relocations.
         assert((target_name).starts_with("oop_handle"), "invalid oop relocation name");
-        relocs.push_back(new JeandleOopReloc(static_cast<int>(block->getAddress().getValue() + edge.getOffset()), _oop_handles[(target_name)]));
+        relocs.push_back(new JeandleOopReloc(static_cast<int>(block->getAddress().getValue() + edge.getOffset()),
+                                             _oop_handles[(target_name)],
+                                             edge.getAddend()));
+      } else if (JeandleAssembler::is_oop_addr_reloc(target, edge.getKind())) {
+        // Oop addr relocations.
+        assert((target_name).starts_with("oop_handle"), "invalid oop relocation name");
+        relocs.push_back(new JeandleOopAddrReloc(static_cast<int>(block->getAddress().getValue() + edge.getOffset()), _oop_handles[(target_name)]));
       } else {
         // Unhandled relocations
         ShouldNotReachHere();
@@ -386,7 +492,7 @@ void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
         call_info = _routine_call_sites[inst_end_offset];
       }
       if (call_info) {
-        relocs.push_back(new JeandleCallReloc(inst_end_offset, _env, _method, build_oop_map(stackmaps, record, call_info), call_info));
+        relocs.push_back(new JeandleCallReloc(inst_end_offset, _env, _method, parse_stackmap(stackmaps, record, call_info), call_info));
       }
     }
   }
@@ -413,8 +519,11 @@ address JeandleCompiledCode::lookup_const_section(llvm::StringRef name, JeandleA
     JEANDLE_ERROR_ASSERT_AND_RET_ON_FAIL(found, "const section not found, bad ELF file", nullptr);
 
     address target_base = _code_buffer.consts()->end();
+    int padding = assembler.emit_consts(((address) _obj->getBufferStart()) + section_info._offset,
+                                         section_info._size,
+                                         section_info._alignment);
+    target_base += padding;
     _const_sections.insert({name, target_base});
-    assembler.emit_consts(((address) _obj->getBufferStart()) + section_info._offset, section_info._size);
     return target_base;
   }
 
@@ -458,63 +567,54 @@ static VMReg resolve_vmreg(const StackMapParser::LocationAccessor& location, Sta
   return nullptr;
 }
 
+LocationValue* JeandleCompiledCode::new_location_value(const StackMapParser::LocationAccessor& location, Location::Type type) {
+  return StackMapUtil::is_stack(location)
+    ? new LocationValue(Location::new_stk_loc(type, StackMapUtil::stack_offset(location)))
+    : new LocationValue(Location::new_reg_loc(type, resolve_vmreg(location, location.getKind())));
+}
+
 void JeandleCompiledCode::fill_one_scope_value(const StackMapParser& stackmaps,
                                                const DeoptValueEncoding& encode,
                                                const StackMapParser::LocationAccessor& location,
-                                               GrowableArray<ScopeValue*>* array,
-                                               int& index) {
+                                               GrowableArray<ScopeValue*>* array) {
   assert(array != nullptr, "sanity");
   bool is_constant = StackMapUtil::is_constant(location);
   switch (encode._basic_type) {
   case T_INT: {
     if (is_constant) {
-      array->at_put_grow(index++, new ConstantIntValue(StackMapUtil::getConstantUint(stackmaps, location)));
+      jint const_int = JeandleBitCast::bit_cast<jint>(StackMapUtil::getConstantUint(stackmaps, location));
+      array->append(new ConstantIntValue(const_int));
     } else {
-      array->at_put_grow(index++,
-        StackMapUtil::is_stack(location)
-        ? new LocationValue(Location::new_stk_loc(Location::Type::normal, StackMapUtil::stack_offset(location)))
-        : new LocationValue(Location::new_reg_loc(Location::Type::normal, resolve_vmreg(location, location.getKind())))
-      );
+      array->append(new_location_value(location, Location::normal));
     }
     break;
   }
   case T_LONG: {
     // 2 stack slots for long type
-    array->at_put_grow(index++, new ConstantIntValue((jint)0));
+    array->append(new ConstantIntValue((jint)0));
     if (is_constant) {
-      array->at_put_grow(index++, new ConstantLongValue(StackMapUtil::getConstantUlong(stackmaps, location)));
+      jlong const_long = JeandleBitCast::bit_cast<jlong>(StackMapUtil::getConstantUlong(stackmaps, location));
+      array->append(new ConstantLongValue(const_long));
     } else {
-      array->at_put_grow(index++,
-        StackMapUtil::is_stack(location)
-        ? new LocationValue(Location::new_stk_loc(Location::Type::lng, StackMapUtil::stack_offset(location)))
-        : new LocationValue(Location::new_reg_loc(Location::Type::lng, resolve_vmreg(location, location.getKind())))
-      );
+      array->append(new_location_value(location, Location::lng));
     }
     break;
   }
   case T_FLOAT: {
     if (is_constant) {
-      array->at_put_grow(index++, new ConstantIntValue(jint_cast(StackMapUtil::getConstantFloat(stackmaps, location))));
+      array->append(new ConstantIntValue(jint_cast(StackMapUtil::getConstantFloat(stackmaps, location))));
     } else {
-      array->at_put_grow(index++,
-        StackMapUtil::is_stack(location)
-        ? new LocationValue(Location::new_stk_loc(Location::Type::normal, StackMapUtil::stack_offset(location)))
-        : new LocationValue(Location::new_reg_loc(Location::Type::normal, resolve_vmreg(location, location.getKind())))
-      );
+      array->append(new_location_value(location, Location::normal));
     }
     break;
   }
   case T_DOUBLE: {
     // 2 stack slots for double type
-    array->at_put_grow(index++, new ConstantIntValue((jint)0));
+    array->append(new ConstantIntValue((jint)0));
     if (is_constant) {
-      array->at_put_grow(index++, new ConstantDoubleValue(StackMapUtil::getConstantDouble(stackmaps, location)));
+      array->append(new ConstantDoubleValue(StackMapUtil::getConstantDouble(stackmaps, location)));
     } else {
-      array->at_put_grow(index++,
-        StackMapUtil::is_stack(location)
-        ? new LocationValue(Location::new_stk_loc(Location::Type::dbl, StackMapUtil::stack_offset(location)))
-        : new LocationValue(Location::new_reg_loc(Location::Type::dbl, resolve_vmreg(location, location.getKind())))
-      );
+      array->append(new_location_value(location, Location::dbl));
     }
     break;
   }
@@ -522,17 +622,13 @@ void JeandleCompiledCode::fill_one_scope_value(const StackMapParser& stackmaps,
     if (is_constant) {
       uint64_t v = StackMapUtil::getConstantUlong(stackmaps, location);
       if (v == 0L) {
-        array->at_put_grow(index++, new ConstantOopWriteValue(nullptr));
+        array->append(new ConstantOopWriteValue(nullptr));
       } else {
         /* No constant oop is embedding into code */
         ShouldNotReachHere();
       }
     } else {
-      array->at_put_grow(index++,
-        StackMapUtil::is_stack(location)
-        ? new LocationValue(Location::new_stk_loc(Location::Type::oop, StackMapUtil::stack_offset(location)))
-        : new LocationValue(Location::new_reg_loc(Location::Type::oop, resolve_vmreg(location, location.getKind())))
-      );
+      array->append(new_location_value(location, Location::oop));
     }
     break;
   }
@@ -540,7 +636,7 @@ void JeandleCompiledCode::fill_one_scope_value(const StackMapParser& stackmaps,
     uint32_t val = StackMapUtil::getConstantUint(stackmaps, location);
     assert(val == 0, "must be zero for T_ILLEGAL");
     // put an illegal value
-    array->at_put_grow(index++, new LocationValue(Location()));
+    array->append(new LocationValue(Location()));
     break;
   }
   default:
@@ -548,27 +644,54 @@ void JeandleCompiledCode::fill_one_scope_value(const StackMapParser& stackmaps,
   }
 }
 
-JeandleOopMap* JeandleCompiledCode::build_oop_map(StackMapParser& stackmaps, StackMapParser::record_iterator& record, CallSiteInfo* call_info) {
+void JeandleCompiledCode::fill_one_monitor_value(const StackMapParser& stackmaps,
+                                                 const DeoptValueEncoding& encode,
+                                                 const StackMapParser::LocationAccessor& object,
+                                                 const StackMapParser::LocationAccessor& lock,
+                                                 GrowableArray<MonitorValue*>* array) {
+  assert(array != nullptr, "sanity");
+  assert(encode._basic_type == T_OBJECT, "should be");
+
+  bool is_constant = StackMapUtil::is_constant(object);
+  ScopeValue* locked_object = nullptr;
+  if (is_constant) {
+    uint64_t v = StackMapUtil::getConstantUlong(stackmaps, object);
+    if (v == 0L) {
+      locked_object = new ConstantOopWriteValue(nullptr);
+    } else {
+      /* No constant oop is embedding into code */
+      ShouldNotReachHere();
+    }
+  } else {
+    locked_object = new_location_value(object, Location::oop);
+  }
+  Location basic_lock = Location::new_stk_loc(Location::normal, StackMapUtil::stack_offset(lock));
+  array->append(new MonitorValue(locked_object, basic_lock, false /* eliminated */));
+}
+
+JeandleStackMap* JeandleCompiledCode::parse_stackmap(StackMapParser& stackmaps, StackMapParser::record_iterator& record, CallSiteInfo* call_info) {
   assert(_frame_size > 0, "frame size must be greater than zero");
-  OopMap* oop_map = new OopMap(frame_size_in_slots(), 0);
 
   // It comes from observation of llvm stackmap, it may be changed in future.
   // The first 2 constants are ignored, the third constant is the number of deopt operands
   auto location = record->location_begin();
+
   auto first = *(location++);
   assert(location != record->location_end(), "must be in range");
+
   auto second = *(location++);
   assert(location != record->location_end(), "must be in range");
+
+  auto third = *(location++);
+
   assert(first.getKind() == StackMapParser::LocationKind::Constant, "unexpected kind");
   assert(second.getKind() == StackMapParser::LocationKind::Constant, "unexpected kind");
-  int num_deopts = 0;
+  assert(third.getKind() == StackMapParser::LocationKind::Constant, "unexpected kind");
+
+  int num_deopts = third.getSmallConstant();
   bool reexecute = false;
-  if (call_info->has_deopt_operands()) {
+  if (num_deopts > 0) {
     assert(this->_method != nullptr, "must be method compilation");
-    auto third = *(location++);
-    assert(third.getKind() == StackMapParser::LocationKind::Constant, "unexpected kind");
-    num_deopts = third.getSmallConstant();
-    assert(num_deopts >= 0, "negative number");
 
     // bci goes first in deopt operands
     int bci = (location++)->getSmallConstant();
@@ -584,30 +707,54 @@ JeandleOopMap* JeandleCompiledCode::build_oop_map(StackMapParser& stackmaps, Sta
   // build scope values
   GrowableArray<ScopeValue*>* locals = num_deopts > 0 ? new GrowableArray<ScopeValue*>(_method->max_locals()) : nullptr;
   GrowableArray<ScopeValue*>* stack  = num_deopts > 0 ? new GrowableArray<ScopeValue*>(_method->max_stack()) : nullptr;
-  int local_index = 0;
-  int stack_index = 0;
+  GrowableArray<MonitorValue*>* monitors = num_deopts > 0 ? new GrowableArray<MonitorValue*>() : nullptr;
   while (num_deopts > 0) {
-    // deopt arguments are passed as a pair, 1st is encode, 2nd is real value
+    // local and stack deopt arguments are passed as a pair: <encode, value>
+    // monitor deopt arguments are passed as a tuple: <encode, object, lock>
     assert(location != record->location_end(), "must be in range");
     auto encode_location = *(location++);
-    assert(location != record->location_end(), "must be in range");
-    auto value_location = *(location++);
+
     uint64_t encode = StackMapUtil::getConstantUlong(stackmaps, encode_location);
     DeoptValueEncoding enc = DeoptValueEncoding::decode(encode);
+    int type = enc._value_type;
+
 #ifdef ASSERT
     if (log_is_enabled(Trace, jeandle)) {
       enc.print();
     }
 #endif
-    assert(enc._value_type == DeoptValueEncoding::LocalType || enc._value_type == DeoptValueEncoding::StackType, "Unsupported type");
-    bool is_local = enc._value_type == DeoptValueEncoding::LocalType;
-    fill_one_scope_value(stackmaps, enc, value_location,
-                         is_local ? locals : stack,
-                         is_local ? local_index : stack_index);
-    num_deopts -= 2;
+
+    switch (type) {
+      case DeoptValueEncoding::LocalType: // fall through
+      case DeoptValueEncoding::StackType: {
+        assert(location != record->location_end(), "must be in range");
+        auto value_location = *(location++);
+
+        bool is_local = type == DeoptValueEncoding::LocalType;
+        fill_one_scope_value(stackmaps, enc, value_location,
+                             is_local ? locals : stack);
+        num_deopts -= 2;
+        break;
+      }
+      case DeoptValueEncoding::MonitorType: {
+        assert(location != record->location_end(), "must be in range");
+        auto obj_location = *(location++);
+
+        assert(location != record->location_end(), "must be in range");
+        auto lock_location = *(location++);
+
+        fill_one_monitor_value(stackmaps, enc, obj_location, lock_location, monitors);
+        num_deopts -= 3;
+        break;
+      }
+      default:
+        Unimplemented();
+    }
+
   }
 
   // build oop map
+  OopMap* oop_map = new OopMap(frame_size_in_slots(), 0);
   for (; location != record->location_end(); location++) {
     // Extract location of base pointer.
     auto base_location = *location;
@@ -623,7 +770,6 @@ JeandleOopMap* JeandleCompiledCode::build_oop_map(StackMapParser& stackmaps, Sta
     auto derived_location = *location;
     StackMapParser::LocationKind derived_kind = derived_location.getKind();
 
-    assert(base_kind == derived_kind, "locations must be in pairs");
     assert(base_kind != StackMapParser::LocationKind::Direct, "invalid location kind");
 
     VMReg reg_base = resolve_vmreg(base_location, base_kind);
@@ -634,10 +780,10 @@ JeandleOopMap* JeandleCompiledCode::build_oop_map(StackMapParser& stackmaps, Sta
       oop_map->set_oop(reg_base);
     } else {
       // Derived pointer.
-      Unimplemented();
+      oop_map->set_derived_oop(reg_derived, reg_base);
     }
   }
-  return new JeandleOopMap(oop_map, locals, stack, reexecute);
+  return new JeandleStackMap(oop_map, locals, stack, monitors, reexecute);
 }
 
 void JeandleCompiledCode::build_exception_handler_table() {
@@ -745,7 +891,7 @@ uint32_t StackMapUtil::getConstantUint(const StackMapParser& parser, const Stack
 uint64_t StackMapUtil::getConstantUlong(const StackMapParser& parser, const StackMapParser::LocationAccessor& location) {
   switch (location.getKind()) {
   case StackMapParser::LocationKind::Constant:
-    return (uint64_t)location.getSmallConstant();
+    return (uint64_t)(JeandleBitCast::bit_cast<int32_t>(location.getSmallConstant()));
   case StackMapParser::LocationKind::ConstantIndex: {
     uint32_t index = location.getConstantIndex();
     return parser.getConstant(index).getValue();
@@ -756,19 +902,9 @@ uint64_t StackMapUtil::getConstantUlong(const StackMapParser& parser, const Stac
 }
 
 float StackMapUtil::getConstantFloat(const StackMapParser& parser, const StackMapParser::LocationAccessor& location) {
-  union {
-    uint32_t u;
-    float f;
-  } uf;
-  uf.u = getConstantUint(parser, location);
-  return uf.f;
+  return JeandleBitCast::bit_cast<float>(getConstantUint(parser, location));
 }
 
 double StackMapUtil::getConstantDouble(const StackMapParser& parser, const StackMapParser::LocationAccessor& location) {
-  union {
-    uint64_t u;
-    double d;
-  } ud;
-  ud.u = getConstantUlong(parser, location);
-  return ud.d;
+  return JeandleBitCast::bit_cast<double>(getConstantUlong(parser, location));
 }

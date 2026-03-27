@@ -50,11 +50,13 @@ class JeandleAssembler : public StackObj {
 
   void emit_insts(address code_start, uint64_t code_size);
 
-  void emit_consts(address consts_start, uint64_t consts_size);
+  int emit_consts(address consts_start, uint64_t consts_size, uint64_t alignment);
 
-  void emit_const_reloc(int offset, LinkKind kind, int64_t addend, address target);
+  void emit_section_word_reloc(int offset, LinkKind kind, int64_t addend, address target, int reloc_section);
 
-  void emit_oop_reloc(int offset, jobject oop_handle);
+  void emit_oop_reloc(int offset, jobject oop_handle, int64_t addend);
+
+  void emit_oop_addr_reloc(int offset, jobject oop_handle);
 
   // Redirect an offset from the displacement to the end of the call instruction.
   // This is used for ROUTINE_CALL and EXTERNAL_CALL.
@@ -62,11 +64,13 @@ class JeandleAssembler : public StackObj {
 
   static bool is_oop_reloc(LinkSymbol& target, LinkKind kind);
 
+  static bool is_oop_addr_reloc(LinkSymbol& target, LinkKind kind);
+
   static bool is_routine_call_reloc(LinkSymbol& target, LinkKind kind);
 
   static bool is_external_call_reloc(LinkSymbol& target, LinkKind kind);
 
-  static bool is_const_reloc(LinkSymbol& target, LinkKind kind);
+  static bool is_section_word_reloc(LinkSymbol& target, LinkKind kind);
 
   // Mirrors C2's InteriorEntryAlignment flag.
   int interior_entry_alignment() const;

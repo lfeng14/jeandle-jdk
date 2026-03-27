@@ -30,7 +30,54 @@
 #include "runtime/safepoint.hpp"
 #include "runtime/vframeArray.hpp"
 
-// This should be called in an assertion at the start of JeandleRuntime routines
+#define GEN_ROUTINE_STUB(name, ruotine_address, return_type, ...)                                    \
+  {                                                                                                  \
+    std::unique_ptr<llvm::LLVMContext> context_ptr = std::make_unique<llvm::LLVMContext>();          \
+    llvm::LLVMContext& context = *context_ptr;                                                       \
+    llvm::FunctionType* func_type = llvm::FunctionType::get(return_type, {__VA_ARGS__}, false);      \
+    ResourceMark rm;                                                                                 \
+    JeandleCompilation compilation(target_machine,                                                   \
+                                   data_layout,                                                      \
+                                   CompilerThread::current()->env(),                                 \
+                                   std::move(context_ptr),                                           \
+                                   #name,                                                            \
+                                   CAST_FROM_FN_PTR(address, ruotine_address),                       \
+                                   func_type);                                                       \
+    if (compilation.error_occurred()) { return false; }                                              \
+    _routine_entry.insert({llvm::StringRef(#name), compilation.compiled_code()->routine_entry()});   \
+  }
+
+#define GEN_ASSEMBLY_ROUTINE_BLOB(name) \
+  generate_##name();
+
+#define REGISTER_DIRECT_ROUTINE(name, routine_address, reachable, is_leaf, return_type, ...) \
+  if (reachable) {                                                                           \
+    _routine_entry.insert({llvm::StringRef(#name), (address)routine_address});               \
+  }                                                                                          \
+  if (is_leaf) {                                                                             \
+    _gc_leaf_routines.insert((address)routine_address);                                      \
+  }
+
+llvm::StringMap<address> JeandleRuntimeRoutine::_routine_entry;
+llvm::DenseSet<address> JeandleRuntimeRoutine::_gc_leaf_routines;
+
+bool JeandleRuntimeRoutine::generate(llvm::TargetMachine* target_machine, llvm::DataLayout* data_layout) {
+  // For each indirect routine, compile a runtime stub to wrap it.
+  ALL_JEANDLE_INDIRECT_ROUTINES(GEN_ROUTINE_STUB);
+
+  // Register direct routines.
+  ALL_JEANDLE_DIRECT_ROUTINES(REGISTER_DIRECT_ROUTINE);
+
+  // Generate assembly routines.
+  ALL_JEANDLE_ASSEMBLY_ROUTINES(GEN_ASSEMBLY_ROUTINE_BLOB);
+  return true;
+}
+
+//=============================================================================
+//                      Jeandle Runtime C/C++ Routines
+//=============================================================================
+
+// This should be called in an assertion at the start of Jeandle runtime routines
 // which are entered from compiled code (all of them)
 #ifdef ASSERT
 static bool check_jeandle_compiled_frame(JavaThread* thread) {
@@ -44,47 +91,6 @@ static bool check_jeandle_compiled_frame(JavaThread* thread) {
   return true;
 }
 #endif // ASSERT
-
-#define GEN_C_ROUTINE_STUB(c_func, return_type, ...)                                                 \
-  {                                                                                                  \
-    std::unique_ptr<llvm::LLVMContext> context_ptr = std::make_unique<llvm::LLVMContext>();          \
-    llvm::LLVMContext& context = *context_ptr;                                                       \
-    llvm::FunctionType* func_type = llvm::FunctionType::get(return_type, {__VA_ARGS__}, false);      \
-    ResourceMark rm;                                                                                 \
-    JeandleCompilation compilation(target_machine,                                                   \
-                                   data_layout,                                                      \
-                                   CompilerThread::current()->env(),                                 \
-                                   std::move(context_ptr),                                           \
-                                   #c_func,                                                          \
-                                   CAST_FROM_FN_PTR(address, c_func),                                \
-                                   func_type);                                                       \
-    if (compilation.error_occurred()) { return false; }                                              \
-    _routine_entry.insert({llvm::StringRef(#c_func), compilation.compiled_code()->routine_entry()}); \
-  }
-
-#define GEN_ASSEMBLY_ROUTINE_BLOB(name) \
-  generate_##name();
-
-#define REGISTER_HOTSPOT_ROUTINE(name, func_entry, ...) \
-  _routine_entry.insert({llvm::StringRef(#name), (address)func_entry});
-
-llvm::StringMap<address> JeandleRuntimeRoutine::_routine_entry;
-
-bool JeandleRuntimeRoutine::generate(llvm::TargetMachine* target_machine, llvm::DataLayout* data_layout) {
-  // Register hotspot routines
-  ALL_HOTSPOT_ROUTINES(REGISTER_HOTSPOT_ROUTINE);
-
-  // Generate assembly routines.
-  ALL_JEANDLE_ASSEMBLY_ROUTINES(GEN_ASSEMBLY_ROUTINE_BLOB);
-
-  // For each C/C++ function, compile a runtime stub to wrap it.
-  ALL_JEANDLE_C_ROUTINES(GEN_C_ROUTINE_STUB);
-  return true;
-}
-
-//=============================================================================
-//                      Jeandle Runtime C/C++ Routines
-//=============================================================================
 
 JRT_ENTRY(void, JeandleRuntimeRoutine::safepoint_handler(JavaThread* current))
   RegisterMap r_map(current,
@@ -108,7 +114,7 @@ JRT_LEAF(address, JeandleRuntimeRoutine::get_exception_handler(JavaThread* curre
   return SharedRuntime::raw_exception_handler_for_return_address(current, current->exception_pc());
 JRT_END
 
-JRT_ENTRY(address, JeandleRuntimeRoutine::search_landingpad(JavaThread* current))
+JRT_ENTRY_NO_ASYNC(address, JeandleRuntimeRoutine::search_landingpad(JavaThread* current))
   assert(current->exception_oop() != nullptr, "exception oop is found");
 
   address pc = current->exception_pc();
@@ -116,6 +122,9 @@ JRT_ENTRY(address, JeandleRuntimeRoutine::search_landingpad(JavaThread* current)
   nmethod* nm = CodeCache::find_nmethod(pc);
   assert(nm != nullptr, "No nmethod found in Jeandle exception handler");
   assert(pc > nm->code_begin(), "sanity check");
+
+  // Reset reserved stack activation.
+  current->stack_overflow_state()->reguard_stack();
 
   JeandleExceptionHandlerTable exception_table(nm);
   uint64_t handler_pc_offset = exception_table.find_handler(static_cast<uint64_t>(pc - nm->code_begin()));
@@ -290,4 +299,20 @@ JRT_ENTRY(void, JeandleRuntimeRoutine::multianewarrayN(Klass* elem_type, arrayOo
   oop obj = ArrayKlass::cast(elem_type)->multi_allocate(len, c_dims, THREAD);
   // TODO: deoptimize_caller_frame(current, HAS_PENDING_EXCEPTION);
   current->set_vm_result(obj);
+JRT_END
+
+JRT_ENTRY(jint, JeandleRuntimeRoutine::instanceof_unloaded_or_null(Method* method, int cp_index, Klass* ex_klass, JavaThread* current))
+  ResourceMark rm(current);
+  constantPoolHandle cp(current, method->constants());
+  // This may trigger class loading.
+  Klass* catch_klass = cp->klass_at(cp_index, current);
+  // If klass_at fails, the pending exception remains on the thread
+  // and the stub's forward_exception_block will handle it automatically.
+  if (HAS_PENDING_EXCEPTION) {
+    return 0;
+  }
+  if (ex_klass != nullptr && ex_klass->is_subtype_of(catch_klass)) {
+    return 1;
+  }
+  return 0;
 JRT_END

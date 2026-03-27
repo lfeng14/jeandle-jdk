@@ -94,7 +94,7 @@ void Relocation::pd_set_call_destination(address x) {
   assert(pd_call == x, "fail in reloc");
 }
 
-void Relocation::pd_set_jeandle_data_value(address x, bool verify_only) {
+void Relocation::pd_set_jeandle_data_value(address x, int addend, bool verify_only) {
   Unimplemented();
 }
 
@@ -122,3 +122,7 @@ void trampoline_stub_Relocation::pd_fix_owner_after_move() {
   Unimplemented();
 }
 #endif // JEANDLE
+
+void jeandle_oop_addr_Relocation::fix_relocation_after_move(const CodeBuffer* src, CodeBuffer* dest) {
+  Unimplemented();
+}

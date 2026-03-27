@@ -69,6 +69,9 @@ public class TestTanDouble {
             checker.checkNext("bci_0:");
             checker.checkNext("call double @StubRoutines_dtan");
             checker.checkNext("ret double");
+            // check gc-leaf-function
+            checker.checkPattern("declare double @StubRoutines_dtan.*#\\d+");
+            checker.checkPattern("attributes #\\d+ = \\{ \"gc-leaf-function\" \\}");
         }
 
         // intrinsic by SharedRuntime
@@ -80,8 +83,7 @@ public class TestTanDouble {
 
         ArrayList<String> command_args = new ArrayList<String>(List.of(
             "-Xbatch", "-XX:-TieredCompilation", "-XX:+UseJeandleCompiler", "-Xcomp",
-            "-Xlog:jeandle=debug", "-XX:+JeandleDumpIR",
-            "-XX:JeandleDumpDirectory="+dump_path,
+            "-Xlog:jeandle=debug", "-XX:+ForceUnreachable",
             "-XX:CompileCommand=compileonly,"+TestWrapper.class.getName()+"::tan_double",
             "-XX:+JeandleUseHotspotIntrinsics"));
         if (is_x86) {
@@ -92,6 +94,21 @@ public class TestTanDouble {
         OutputAnalyzer output = ProcessTools.executeCommand(pb);
         output.shouldHaveExitValue(0)
             .shouldContain("Method `static jdouble java.lang.Math.tan(jdouble)` is parsed as intrinsic");
+
+        command_args = new ArrayList<String>(List.of(
+            "-Xbatch", "-XX:-TieredCompilation", "-XX:+UseJeandleCompiler", "-Xcomp",
+            "-Xlog:jeandle=debug", "-XX:+JeandleDumpIR",
+            "-XX:JeandleDumpDirectory="+dump_path,
+            "-XX:CompileCommand=compileonly,"+TestWrapper.class.getName()+"::tan_double",
+            "-XX:+JeandleUseHotspotIntrinsics"));
+        if (is_x86) {
+            command_args.addAll(List.of("-XX:+UnlockDiagnosticVMOptions", "-XX:-UseLibmIntrinsic"));
+        }
+        command_args.add(TestWrapper.class.getName());
+        pb = ProcessTools.createLimitedTestJavaProcessBuilder(command_args);
+        output = ProcessTools.executeCommand(pb);
+        output.shouldHaveExitValue(0)
+            .shouldContain("Method `static jdouble java.lang.Math.tan(jdouble)` is parsed as intrinsic");
         // Verify llvm IR
         FileCheck checker = new FileCheck(dump_path, TestWrapper.class.getMethod("tan_double", double.class), false);
         // find compiled method
@@ -100,8 +117,10 @@ public class TestTanDouble {
         checker.checkNext("entry:");
         checker.checkNext("br label %bci_0");
         checker.checkNext("bci_0:");
-        checker.checkNext("call double @SharedRuntime_dtan");
+        // check gc-leaf-function
+        checker.checkNextPattern("call double inttoptr \\(i64 (\\d+) to ptr\\).*#\\d+");
         checker.checkNext("ret double");
+        checker.checkPattern("attributes #\\d+ = \\{ \"gc-leaf-function\" \\}");
     }
 
     static public class TestWrapper {

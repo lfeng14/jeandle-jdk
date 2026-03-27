@@ -34,7 +34,24 @@ class JeandleFuncSig : public AllStatic {
   // Create a llvm function according to the Java method.
   static llvm::Function* create_llvm_func(ciMethod* method, llvm::Module& target_module);
   static std::string method_name(ciMethod* method);
+  static std::string method_name_with_signature(ciMethod* method);
   static void setup_description(llvm::Function* func, bool is_stub = false);
+};
+
+bool is_jeandle_compiler_thread(Thread* t);
+
+class JeandleBitCast: public AllStatic {
+public:
+  template <typename To, typename From>
+  static To bit_cast(const From& src) noexcept {
+    static_assert(sizeof(To) == sizeof(From), "must be");
+    static_assert(std::is_trivially_copyable_v<From>, "must be");
+    static_assert(std::is_trivially_copyable_v<To>,   "must be");
+
+    To dst;
+    std::memcpy(&dst, &src, sizeof(To));
+    return dst;
+  }
 };
 
 #endif // SHARE_JEANDLE_UTILS_HPP

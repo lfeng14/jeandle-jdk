@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, the Jeandle-JDK Authors. All Rights Reserved.
+ * Copyright (c) 2025, 2026, the Jeandle-JDK Authors. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@
 #include "jeandle/__llvmHeadersBegin__.hpp"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/IRBuilder.h"
@@ -122,16 +121,18 @@ class JeandleVMState : public JeandleCompilationResourceObj {
   void dstore(int index, llvm::Value* value) { store(BasicType::T_DOUBLE, index, value); }
 
   // Locks operations:
-  void push_lock(llvm::Value* lock) { assert(lock != nullptr, "null lock"); _locks.push_back(lock); }
-  llvm::Value* pop_lock() { llvm::Value* v = _locks.back(); _locks.pop_back(); return v; }
+  void push_lock(LockValue lock) { assert(!lock.is_null(), "null lock"); _locks.push_back(lock); }
+  LockValue pop_lock() { LockValue v = _locks.back(); _locks.pop_back(); return v; }
   size_t locks_size() const { return _locks.size(); }
-  llvm::Value* lock_at(int index) { return _locks[index]; }
+  LockValue lock_at(int index) { return _locks[index]; }
 
   llvm::SmallVector<llvm::Value*> deopt_args(llvm::IRBuilder<> &builder, int bci);
+
+  int interpreter_frame_size_in_bytes();
  private:
   llvm::SmallVector<TypedValue> _stack;
   llvm::SmallVector<TypedValue> _locals;
-  llvm::SmallVector<llvm::Value*> _locks;
+  llvm::SmallVector<LockValue> _locks;
 
   llvm::LLVMContext* _context;
 
@@ -157,16 +158,16 @@ class JeandleBasicBlock : public JeandleCompilationResourceObj {
   void clear(Flag f)                             { _flags &= ~f; }
   bool is_set(Flag f) const                      { return (_flags & f) != 0; }
 
-  llvm::SmallPtrSet<JeandleBasicBlock*, 8>& successors() { return _successors; }
+  llvm::SmallVector<JeandleBasicBlock*, 8>& successors() { return _successors; }
   void add_successor(JeandleBasicBlock* successor) {
     assert(successor != nullptr, "successor can not be null");
-    _successors.insert(successor);
+    _successors.push_back(successor);
   }
 
-  llvm::SmallPtrSet<JeandleBasicBlock*, 8>& predecessors() { return _predecessors; }
+  llvm::SmallVector<JeandleBasicBlock*, 8>& predecessors() { return _predecessors; }
   void add_predecessor(JeandleBasicBlock* predecessor) {
     assert(predecessor != nullptr, "predecessor can not be null");
-    _predecessors.insert(predecessor);
+    _predecessors.push_back(predecessor);
   }
 
   int reverse_post_order() const { return _reverse_post_order; }
@@ -188,6 +189,8 @@ class JeandleBasicBlock : public JeandleCompilationResourceObj {
   int exeption_range_start_bci() { return _ci_block->ex_start_bci(); }
   int exeption_range_limit_bci() { return _ci_block->ex_limit_bci(); }
 
+  void set_initial_jvm(JeandleVMState* initial_jvm) { _initial_jvm = initial_jvm; }
+
  private:
   int _block_id;
   int _flags;
@@ -197,8 +200,9 @@ class JeandleBasicBlock : public JeandleCompilationResourceObj {
 
   JeandleVMState* _jvm;
 
-  llvm::SmallPtrSet<JeandleBasicBlock*, 8> _predecessors;
-  llvm::SmallPtrSet<JeandleBasicBlock*, 8> _successors;
+  // Use vector to allow duplicate predecessors/successors, except for exception handlers.
+  llvm::SmallVector<JeandleBasicBlock*, 8> _predecessors;
+  llvm::SmallVector<JeandleBasicBlock*, 8> _successors;
 
   llvm::BasicBlock* _header_llvm_block;
   llvm::BasicBlock* _tail_llvm_block;
@@ -248,6 +252,8 @@ class BasicBlockBuilder : public JeandleCompilationResourceObj {
 
   void mark_loops();
   void mark_loops(JeandleBasicBlock* block);
+
+  void mark_unloaded_catch_klass();
 };
 
 // Convert java bytecodes to llvm ir.
@@ -279,6 +285,9 @@ class JeandleAbstractInterpreter : public StackObj {
   // Contains all blocks to interpret. Sorted by reverse-post-order.
   llvm::SmallVector<JeandleBasicBlock*> _work_list;
 
+  // Object & Lock for synchronized method
+  LockValue _sync_lock;
+
   void initialize_VM_state();
   void interpret();
   void interpret_block(JeandleBasicBlock* block);
@@ -305,15 +314,23 @@ class JeandleAbstractInterpreter : public StackObj {
   void instanceof(int klass_index);
   void arith_op(BasicType type, Bytecodes::Code code);
 
-  llvm::CallInst*   call_java_op(llvm::StringRef java_op, llvm::ArrayRef<llvm::Value*> args);
-  llvm::InvokeInst* call_java_op_ex(llvm::StringRef java_op, llvm::ArrayRef<llvm::Value*> args);
+  llvm::CallInst*   call_java_op(llvm::StringRef java_op, 
+                                 llvm::ArrayRef<llvm::Value*> args,
+                                 llvm::ArrayRef<llvm::OperandBundleDef> deopt_bundle = {});
+  llvm::InvokeInst* call_java_op_ex(llvm::StringRef java_op, llvm::ArrayRef<llvm::Value*> args,
+                                    llvm::ArrayRef<llvm::OperandBundleDef> deopt_bundle = {});
   llvm::CallInst*   create_call(llvm::FunctionCallee callee,
                                 llvm::ArrayRef<llvm::Value*> arg,
                                 llvm::CallingConv::ID calling_conv,
                                 llvm::ArrayRef<llvm::OperandBundleDef> deopt_bundle = {});
   llvm::InvokeInst* create_call_ex(llvm::FunctionCallee callee,
                                    llvm::ArrayRef<llvm::Value*> arg,
-                                   llvm::CallingConv::ID calling_conv);
+                                   llvm::CallingConv::ID calling_conv,
+                                   llvm::ArrayRef<llvm::OperandBundleDef> deopt_bundle = {});
+
+  llvm::OperandBundleDef create_current_deopt_bundle() {
+    return llvm::OperandBundleDef("deopt", _jvm->deopt_args(_ir_builder, _bytecodes.cur_bci()));
+  }
 
   void add_safepoint_poll();
 
@@ -352,6 +369,7 @@ class JeandleAbstractInterpreter : public StackObj {
   void do_array_store(BasicType basic_type);
   llvm::Value* do_array_load_inner(BasicType basic_type, llvm::Type* load_type);
   void do_array_store_inner(BasicType basic_type, llvm::Type* store_type, llvm::Value* value);
+  void array_store_check(llvm::Value* value, llvm::Value* array_ref);
   llvm::Value* compute_array_element_address(BasicType basic_type, llvm::Type* type);
 
   typedef struct {
@@ -371,14 +389,27 @@ class JeandleAbstractInterpreter : public StackObj {
   // Implementation of _new
   void do_new();
 
+  void shared_lock(LockValue lock);
+  void shared_unlock(LockValue lock);
   void monitorenter();
   void monitorexit();
 
   void null_check(llvm::Value* obj);
 
+  void zero_check(llvm::Value* divisor);
+
   void boundary_check(llvm::Value* array_oop, llvm::Value* index);
 
   void uncommon_trap(Deoptimization::DeoptReason, Deoptimization::DeoptAction, llvm::BasicBlock* insert_block = nullptr);
+
+  void return_current(llvm::Value* value);
+
+  // Register finalizers on return from Object::<init>
+  void call_register_finalizer();
+
+  void clinit_barrier(ciInstanceKlass* ik, ciMethod* context);
+  void guard_klass_being_initialized(llvm::Value* klass);
+  void guard_init_thread(llvm::Value* klass);
 };
 
 #endif // SHARE_JEANDLE_ABSTRACT_INTERPRETER_HPP
