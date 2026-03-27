@@ -61,4 +61,6 @@ Date:   <Date Info>
 
 ### Cross-Repository Testing
 
-The jeandle-llvm CI can also trigger jeandle-jdk tests via the GitHub Actions `repository_dispatch` event, allowing testing of changes that may affect the JDK. If you want to disable this trigger for a PR, add the label `jdk-dependent` to the jeandle-llvm pull request.
+The CI of the jeandle-llvm repository will, by default, trigger the CI of the jeandle-jdk repository. You can prevent triggering the jeandle-jdk CI by adding the `jdk-dependent` label to a PR in the jeandle-llvm repository.
+
+When a feature falls into the “Co-dependent Changes” category mentioned above, we should add the `jdk-dependent` label to the PR in jeandle-llvm, because the jeandle-jdk CI triggered from jeandle-llvm is always tested against the main branch of jeandle-jdk, which will fail. Moreover, the PR in the jeandle-jdk repository has already run the appropriate JDK-related tests based on the corresponding PR in jeandle-llvm.
