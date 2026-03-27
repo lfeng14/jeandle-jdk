@@ -44,6 +44,7 @@
 #include "code/exceptionHandlerTable.hpp"
 #include "runtime/sharedRuntime.hpp"
 
+class JeandleReloc;
 
 class DeoptValueEncoding {
   friend class JeandleCompiledCode;
@@ -258,6 +259,9 @@ class JeandleCompiledCode : public StackObj {
   void setup_frame_size();
 
   void resolve_reloc_info(JeandleAssembler& assembler);
+  bool pd_resolve_reloc(JeandleAssembler& assembler,
+                        llvm::SmallVector<JeandleReloc*>& relocs,
+                        llvm::jitlink::LinkGraph* link_graph);
 
   // Lookup address of const section in CodeBuffer.
   address lookup_const_section(llvm::StringRef name, JeandleAssembler& assembler);
@@ -271,6 +275,7 @@ class JeandleCompiledCode : public StackObj {
                               const StackMapParser::LocationAccessor& lock, GrowableArray<MonitorValue*>* array);
 
   void build_exception_handler_table();
+  bool pd_build_exception_handler_table();
   void build_implicit_exception_table();
 
   int frame_size_in_slots();
