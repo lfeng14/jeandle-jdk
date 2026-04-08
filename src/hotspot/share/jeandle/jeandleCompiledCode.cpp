@@ -160,7 +160,7 @@ void JeandleCompiledCode::finalize() {
   int consts_size = 0;
   int stubs_size = 0;
   estimate_codebuffer_component_sizes(consts_size, stubs_size);
-  _code_buffer.initialize(code_size + 2048/* for prolog */,
+  _code_buffer.initialize(code_size + consts_size + 2048/* for prolog */,
                           20 * (sizeof(relocInfo) + relocInfo::length_limit), /* preinitialize the relocs to some large size */
                           stubs_size,
                           _env->oop_recorder());
