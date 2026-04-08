@@ -121,7 +121,7 @@ void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, i
       return;
     }
     llvm::StringRef sec_name = *expected_sec_name;
-    if (sec_name.starts_with(".rodata")) {
+    if (sec_name.starts_with(".rodata") || sec_name.starts_with(".data.rel.ro")) {
       const_size += (int) section.getSize() + section.getAlignment().value();
     }
   }
