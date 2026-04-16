@@ -35,6 +35,7 @@ const int JeandleAssembler::_call_stub_size         = 28;
 // No need to emit routine stub on x86.
 const int JeandleAssembler::_routine_stub_size      = 0;
 const int JeandleAssembler::_exception_handler_size = NativeJump::instruction_size;
+const int JeandleAssembler::_deopt_handler_size     = 17;
 
 int JeandleAssembler::get_call_stub_size() {
   return _call_stub_size;
@@ -46,6 +47,10 @@ int JeandleAssembler::get_exception_handler_size() {
 
 int JeandleAssembler::get_routine_stub_size() {
   return _routine_stub_size;
+}
+
+int JeandleAssembler::get_deopt_handler_size() {
+  return _deopt_handler_size;
 }
 
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
@@ -216,12 +221,8 @@ int JeandleAssembler::emit_exception_handler() {
   return offset;
 }
 
-int JeandleAssembler::deopt_handler_size() {
-  return 17;
-}
-
 int JeandleAssembler::emit_deopt_handler() {
-  address base = __ start_a_stub(deopt_handler_size());
+  address base = __ start_a_stub(get_deopt_handler_size());
   if (base == nullptr) {
     JEANDLE_REPORT_ERROR_AND_RET("deopt handler stub overflow", 0);
   }
@@ -243,7 +244,7 @@ int JeandleAssembler::emit_deopt_handler() {
   __ pushptr(here.addr(), noreg);
 #endif
   __ jump(RuntimeAddress(JeandleRuntimeRoutine::get_routine_entry(JeandleRuntimeRoutine::_deopt_blob)));
-  assert(__ offset() - offset <= deopt_handler_size(), "deopt handler stub overflow");
+  assert(__ offset() - offset <= get_deopt_handler_size(), "deopt handler stub overflow");
   __ end_a_stub();
   return offset;
 }

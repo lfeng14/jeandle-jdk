@@ -45,6 +45,11 @@ inline void swap(JeandleReloc*& a, JeandleReloc*& b) {
   std::swap(a, b);
 }
 
+// Code buffer initialization constants
+static constexpr int PROLOG_RESERVED_SIZE = 2048;
+static constexpr int RELOC_SIZE_MULTIPLIER = 20;
+static constexpr int MAX_DEOPT_HANDLER_COUNT = 2;  // Regular deopt + MethodHandle deopt
+
 // Decide whether to emit a stack overflow check for the compiled entry based on
 // Java call presence and frame size pressure (skip stub compilations).
 static bool need_stack_overflow_check(bool is_method_compilation,
@@ -141,8 +146,10 @@ void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, i
       }
     }
   }
-  // Add an exception handler size
+  // Add exception handler size
   stubs_size += JeandleAssembler::get_exception_handler_size();
+  // Add deopt handler sizes (regular deopt + MethodHandle deopt if needed)
+  stubs_size += MAX_DEOPT_HANDLER_COUNT * JeandleAssembler::get_deopt_handler_size();
 }
 
 void JeandleCompiledCode::finalize() {
@@ -160,8 +167,8 @@ void JeandleCompiledCode::finalize() {
   int consts_size = 0;
   int stubs_size = 0;
   estimate_codebuffer_component_sizes(consts_size, stubs_size);
-  _code_buffer.initialize(code_size + consts_size + 2048/* for prolog */,
-                          20 * (sizeof(relocInfo) + relocInfo::length_limit), /* preinitialize the relocs to some large size */
+  _code_buffer.initialize(code_size + consts_size + PROLOG_RESERVED_SIZE,
+                          RELOC_SIZE_MULTIPLIER * (sizeof(relocInfo) + relocInfo::length_limit),
                           stubs_size,
                           _env->oop_recorder());
   if (_code_buffer.blob() == nullptr) {

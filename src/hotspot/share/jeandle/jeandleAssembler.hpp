@@ -50,7 +50,6 @@ class JeandleAssembler : public StackObj {
   int emit_exception_handler();
 
   int emit_deopt_handler();
-  int deopt_handler_size();
 
   void emit_insts(address code_start, uint64_t code_size);
 
@@ -85,13 +84,18 @@ class JeandleAssembler : public StackObj {
 
   static int get_exception_handler_size();
 
+  static int get_deopt_handler_size();
+
  private:
   MacroAssembler* _masm;
 
 #include CPU_HEADER(jeandleAssembler)
- static const int _call_stub_size;
- static const int _routine_stub_size;
- static const int _exception_handler_size;
+
+  // Static stub size constants defined in platform-specific implementation files
+  static const int _call_stub_size;
+  static const int _routine_stub_size;
+  static const int _exception_handler_size;
+  static const int _deopt_handler_size;
 };
 
 #endif // SHARE_JEANDLE_ASSEMBLER_HPP

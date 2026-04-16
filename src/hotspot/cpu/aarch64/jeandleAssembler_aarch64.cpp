@@ -31,10 +31,11 @@
 
 #define __ _masm->
 
+// Use worst-case size for estimation (matches MacroAssembler::far_codestub_branch_size())
+const int JeandleAssembler::_exception_handler_size = 3 * NativeInstruction::instruction_size;
 const int JeandleAssembler::_call_stub_size         = 13 * NativeInstruction::instruction_size;
 const int JeandleAssembler::_routine_stub_size      = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size;
-// for far branches on AArch64, use ADRP + ADD + BR to reach the target.
-const int JeandleAssembler::_exception_handler_size = 3 * NativeInstruction::instruction_size;
+const int JeandleAssembler::_deopt_handler_size     = 7 * NativeInstruction::instruction_size;
 
 int JeandleAssembler::get_call_stub_size() {
   return _call_stub_size;
@@ -46,6 +47,10 @@ int JeandleAssembler::get_exception_handler_size() {
 
 int JeandleAssembler::get_routine_stub_size() {
   return _routine_stub_size;
+}
+
+int JeandleAssembler::get_deopt_handler_size() {
+  return _deopt_handler_size;
 }
 
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
@@ -253,12 +258,8 @@ int JeandleAssembler::emit_exception_handler() {
   return offset;
 }
 
-int JeandleAssembler::deopt_handler_size() {
-  return 7 * NativeInstruction::instruction_size;
-}
-
 int JeandleAssembler::emit_deopt_handler() {
-  int stub_size = deopt_handler_size();
+  int stub_size = get_deopt_handler_size();
   address base = __ start_a_stub(stub_size);
   if (base == nullptr) {
     JEANDLE_REPORT_ERROR_AND_RET("deopt handler stub overflow", 0);
