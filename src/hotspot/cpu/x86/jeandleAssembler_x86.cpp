@@ -37,22 +37,6 @@ const int JeandleAssembler::_routine_stub_size      = 0;
 const int JeandleAssembler::_exception_handler_size = NativeJump::instruction_size;
 const int JeandleAssembler::_deopt_handler_size     = 17;
 
-int JeandleAssembler::get_call_stub_size() {
-  return _call_stub_size;
-}
-
-int JeandleAssembler::get_exception_handler_size() {
-  return _exception_handler_size;
-}
-
-int JeandleAssembler::get_routine_stub_size() {
-  return _routine_stub_size;
-}
-
-int JeandleAssembler::get_deopt_handler_size() {
-  return _deopt_handler_size;
-}
-
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
   assert(inst_offset >= 0, "invalid call instruction address");
   assert(call->type() == JeandleCompiledCall::STATIC_CALL, "legal call type");
@@ -222,7 +206,7 @@ int JeandleAssembler::emit_exception_handler() {
 }
 
 int JeandleAssembler::emit_deopt_handler() {
-  address base = __ start_a_stub(get_deopt_handler_size());
+  address base = __ start_a_stub(JeandleAssembler::_deopt_handler_size);
   if (base == nullptr) {
     JEANDLE_REPORT_ERROR_AND_RET("deopt handler stub overflow", 0);
   }
@@ -244,7 +228,7 @@ int JeandleAssembler::emit_deopt_handler() {
   __ pushptr(here.addr(), noreg);
 #endif
   __ jump(RuntimeAddress(JeandleRuntimeRoutine::get_routine_entry(JeandleRuntimeRoutine::_deopt_blob)));
-  assert(__ offset() - offset <= get_deopt_handler_size(), "deopt handler stub overflow");
+  assert(__ offset() - offset <= JeandleAssembler::_deopt_handler_size, "deopt handler stub overflow");
   __ end_a_stub();
   return offset;
 }

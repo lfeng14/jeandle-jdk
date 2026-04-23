@@ -78,24 +78,16 @@ class JeandleAssembler : public StackObj {
   // Mirrors C2's InteriorEntryAlignment flag.
   int interior_entry_alignment() const;
 
-  static int get_call_stub_size();
-
-  static int get_routine_stub_size();
-
-  static int get_exception_handler_size();
-
-  static int get_deopt_handler_size();
-
- private:
-  MacroAssembler* _masm;
-
-#include CPU_HEADER(jeandleAssembler)
-
   // Static stub size constants defined in platform-specific implementation files
   static const int _call_stub_size;
   static const int _routine_stub_size;
   static const int _exception_handler_size;
   static const int _deopt_handler_size;
+
+ private:
+  MacroAssembler* _masm;
+
+#include CPU_HEADER(jeandleAssembler)
 };
 
 #endif // SHARE_JEANDLE_ASSEMBLER_HPP

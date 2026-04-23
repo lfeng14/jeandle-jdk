@@ -119,17 +119,7 @@ void JeandleCompiledCode::install_obj(std::unique_ptr<ObjectBuffer> obj) {
 }
 
 void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, int &stubs_size) {
-  for (const auto &section: _elf->sections()) {
-    llvm::Expected <llvm::StringRef> expected_sec_name = section.getName();
-    if (auto Err = expected_sec_name.takeError()) {
-      JeandleCompilation::report_jeandle_error("failed to get section name");
-      return;
-    }
-    llvm::StringRef sec_name = *expected_sec_name;
-    if (sec_name.starts_with(".rodata") || sec_name.starts_with(".data.rel.ro")) {
-      const_size += (int) section.getSize() + section.getAlignment().value();
-    }
-  }
+  const_size = (int) ReadELF::calculate_const_sections_size(*_elf);
 
   SectionInfo section_info(".llvm_stackmaps");
   if (ReadELF::findSection(*_elf, section_info)) {
@@ -139,17 +129,17 @@ void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, i
       if (record->getID() < _non_routine_call_sites.size()) {
         call_info = _non_routine_call_sites[record->getID()];
         if (call_info && call_info->type() == JeandleCompiledCall::STATIC_CALL)
-          stubs_size += JeandleAssembler::get_call_stub_size();
+          stubs_size += JeandleAssembler::_call_stub_size;
       } else {
         // _routine_call_sites only contains routine call
-        stubs_size += JeandleAssembler::get_routine_stub_size();
+        stubs_size += JeandleAssembler::_routine_stub_size;
       }
     }
   }
   // Add exception handler size
-  stubs_size += JeandleAssembler::get_exception_handler_size();
+  stubs_size += JeandleAssembler::_exception_handler_size;
   // Add deopt handler sizes (regular deopt + MethodHandle deopt if needed)
-  stubs_size += MAX_DEOPT_HANDLER_COUNT * JeandleAssembler::get_deopt_handler_size();
+  stubs_size += MAX_DEOPT_HANDLER_COUNT * JeandleAssembler::_deopt_handler_size;
 }
 
 void JeandleCompiledCode::finalize() {

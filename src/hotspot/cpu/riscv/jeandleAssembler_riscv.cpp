@@ -26,9 +26,17 @@
 #include "jeandle/jeandleRuntimeRoutine.hpp"
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
+#include "code/nativeInst.hpp"
 #include "runtime/sharedRuntime.hpp"
 
 #define __ _masm->
+
+// Use worst-case size for estimation (matches MacroAssembler::far_branch_size())
+const int JeandleAssembler::_call_stub_size         = 14 * NativeInstruction::instruction_size +
+                                                      (NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size);
+const int JeandleAssembler::_routine_stub_size      = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size;
+const int JeandleAssembler::_exception_handler_size = 2 * NativeInstruction::instruction_size;
+const int JeandleAssembler::_deopt_handler_size     = 7 * NativeInstruction::instruction_size;
 
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
   assert(call->type() == JeandleCompiledCall::STATIC_CALL, "legal call type");
