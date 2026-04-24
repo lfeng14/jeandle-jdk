@@ -304,6 +304,8 @@ public class VerifyCACerts {
             add("quovadisrootca [jdk]");
             // Valid until: Sat May 21 04:00:00 GMT 2022
             add("geotrustglobalca [jdk]");
+            // Valid until: Mon May 12 23:59:00 UTC 2025
+            add("baltimorecybertrustca [jdk]");
         }
     };
 

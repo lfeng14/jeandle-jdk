@@ -46,8 +46,8 @@ public class B6644726 {
         // Let's test the default path
         lst.add("myCookie1=foo");
         // Then some alternate expires format
-        lst.add("myCookie2=bar; path=/dir; expires=Tue, 19 Aug 2025 16:00:00 GMT");
-        lst.add("myCookie3=test; path=/dir; expires=Tue Aug 19 2025 16:00:00 GMT-0100");
+        lst.add("myCookie2=bar; path=/dir; expires=Tue, 19 Aug 2036 16:00:00 GMT");
+        lst.add("myCookie3=test; path=/dir; expires=Tue Aug 19 2036 16:00:00 GMT-0100");
         // Then Netscape draft cookies and domains
         lst.add("myCookie4=test; domain=.sun.com; path=/dir/foo");
         HashMap<String, List<String>> map = new HashMap<String, List<String>>();
