@@ -31,11 +31,20 @@
 
 #define __ _masm->
 
-// Use worst-case size for estimation (matches MacroAssembler::far_codestub_branch_size())
-const int JeandleAssembler::_exception_handler_size = 3 * NativeInstruction::instruction_size;
-const int JeandleAssembler::_call_stub_size         = 13 * NativeInstruction::instruction_size;
-const int JeandleAssembler::_routine_stub_size      = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size;
-const int JeandleAssembler::_deopt_handler_size     = 7 * NativeInstruction::instruction_size;
+// Stub sizes for call sites
+const int JeandleAssembler::_call_stub_size    = 13 * NativeInstruction::instruction_size;
+const int JeandleAssembler::_routine_stub_size = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size;
+
+// Handler sizes matching C2's HandlerImpl (see aarch64.ad):
+//   size_exception_handler() = MacroAssembler::far_codestub_branch_size()
+//   size_deopt_handler()     = NativeInstruction::instruction_size + MacroAssembler::far_codestub_branch_size()
+int JeandleAssembler::exception_handler_size() {
+  return MacroAssembler::far_codestub_branch_size();
+}
+
+int JeandleAssembler::deopt_handler_size() {
+  return NativeInstruction::instruction_size + MacroAssembler::far_codestub_branch_size();
+}
 
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
   assert(call->type() == JeandleCompiledCall::STATIC_CALL, "illegal call type");
@@ -243,7 +252,7 @@ int JeandleAssembler::emit_exception_handler() {
 }
 
 int JeandleAssembler::emit_deopt_handler() {
-  int stub_size = JeandleAssembler::_deopt_handler_size;
+  int stub_size = deopt_handler_size();
   address base = __ start_a_stub(stub_size);
   if (base == nullptr) {
     JEANDLE_REPORT_ERROR_AND_RET("deopt handler stub overflow", 0);

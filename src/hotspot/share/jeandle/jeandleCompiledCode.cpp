@@ -45,10 +45,11 @@ inline void swap(JeandleReloc*& a, JeandleReloc*& b) {
   std::swap(a, b);
 }
 
-// Code buffer initialization constants
-static constexpr int PROLOG_RESERVED_SIZE = 2048;
+// Code buffer initialization constants (following C2's PhaseOutput::init_buffer pattern)
+static constexpr int PROLOG_RESERVED_SIZE  = 2048;
 static constexpr int RELOC_SIZE_MULTIPLIER = 20;
-static constexpr int MAX_DEOPT_HANDLER_COUNT = 2;  // Regular deopt + MethodHandle deopt
+// Marginal slop for handler and per-stub allocation (matches C2's MAX_stubs_size)
+static constexpr int STUB_SLOP_SIZE = 128;
 
 // Decide whether to emit a stack overflow check for the compiled entry based on
 // Java call presence and frame size pressure (skip stub compilations).
@@ -119,27 +120,39 @@ void JeandleCompiledCode::install_obj(std::unique_ptr<ObjectBuffer> obj) {
 }
 
 void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, int &stubs_size) {
+  // Estimate const section size from ELF rodata sections.
   const_size = (int) ReadELF::calculate_const_sections_size(*_elf);
 
+  // Count stub sizes from call sites in stackmaps.
   SectionInfo section_info(".llvm_stackmaps");
   if (ReadELF::findSection(*_elf, section_info)) {
     StackMapParser stackmaps(llvm::ArrayRef(((uint8_t *) object_start()) + section_info._offset, section_info._size));
     for (auto record = stackmaps.records_begin(); record != stackmaps.records_end(); ++record) {
-      CallSiteInfo *call_info = nullptr;
       if (record->getID() < _non_routine_call_sites.size()) {
-        call_info = _non_routine_call_sites[record->getID()];
-        if (call_info && call_info->type() == JeandleCompiledCall::STATIC_CALL)
+        CallSiteInfo *call_info = _non_routine_call_sites[record->getID()];
+        if (call_info && call_info->type() == JeandleCompiledCall::STATIC_CALL) {
           stubs_size += JeandleAssembler::_call_stub_size;
+        }
       } else {
-        // _routine_call_sites only contains routine call
+        // _routine_call_sites only contains routine calls.
         stubs_size += JeandleAssembler::_routine_stub_size;
       }
     }
   }
-  // Add exception handler size
-  stubs_size += JeandleAssembler::_exception_handler_size;
-  // Add deopt handler sizes (regular deopt + MethodHandle deopt if needed)
-  stubs_size += MAX_DEOPT_HANDLER_COUNT * JeandleAssembler::_deopt_handler_size;
+
+  // Add handler sizes following C2's init_buffer() pattern:
+  //   exception_handler_req = size_exception_handler() + STUB_SLOP_SIZE
+  //   deopt_handler_req     = size_deopt_handler()     + STUB_SLOP_SIZE
+  stubs_size += JeandleAssembler::exception_handler_size() + STUB_SLOP_SIZE;
+  stubs_size += JeandleAssembler::deopt_handler_size() + STUB_SLOP_SIZE;
+
+  // If method has MethodHandle invokes, add a second deopt handler.
+  if (_has_method_handle_invoke) {
+    stubs_size += JeandleAssembler::deopt_handler_size() + STUB_SLOP_SIZE;
+  }
+
+  // Ensure per-stub margin (matches C2's stub_req += MAX_stubs_size).
+  stubs_size += STUB_SLOP_SIZE;
 }
 
 void JeandleCompiledCode::finalize() {
@@ -154,10 +167,18 @@ void JeandleCompiledCode::finalize() {
   RETURN_VOID_ON_JEANDLE_ERROR();
   assert(_frame_size > 0, "frame size must be positive");
 
+  // Estimate component sizes following C2's PhaseOutput::init_buffer() pattern.
   int consts_size = 0;
   int stubs_size = 0;
   estimate_codebuffer_component_sizes(consts_size, stubs_size);
-  _code_buffer.initialize(code_size + consts_size + PROLOG_RESERVED_SIZE,
+
+  // The extra spacing after the code is necessary on some platforms.
+  // Sometimes we need to patch in a jump after the last instruction,
+  // if the nmethod has been deoptimized. (See 4932387, 4894843.)
+  int pad_req = NativeCall::instruction_size;
+
+  int total_req = (int)code_size + consts_size + PROLOG_RESERVED_SIZE + pad_req + stubs_size;
+  _code_buffer.initialize(total_req,
                           RELOC_SIZE_MULTIPLIER * (sizeof(relocInfo) + relocInfo::length_limit),
                           stubs_size,
                           _env->oop_recorder());

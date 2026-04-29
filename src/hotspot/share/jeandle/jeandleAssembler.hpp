@@ -78,11 +78,15 @@ class JeandleAssembler : public StackObj {
   // Mirrors C2's InteriorEntryAlignment flag.
   int interior_entry_alignment() const;
 
-  // Static stub size constants defined in platform-specific implementation files
+  // Stub sizes for call sites, defined in platform-specific implementation files.
   static const int _call_stub_size;
   static const int _routine_stub_size;
-  static const int _exception_handler_size;
-  static const int _deopt_handler_size;
+
+  // Handler sizes matching C2's HandlerImpl::size_exception_handler/size_deopt_handler,
+  // defined in platform-specific implementation files. These are functions (not constants)
+  // because the size may depend on runtime flags (e.g., far_branches on aarch64).
+  static int exception_handler_size();
+  static int deopt_handler_size();
 
  private:
   MacroAssembler* _masm;

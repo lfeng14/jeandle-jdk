@@ -31,11 +31,21 @@
 
 #define __ _masm->
 
-const int JeandleAssembler::_call_stub_size         = 28;
+// Stub sizes for call sites
+const int JeandleAssembler::_call_stub_size    = 28;
 // No need to emit routine stub on x86.
-const int JeandleAssembler::_routine_stub_size      = 0;
-const int JeandleAssembler::_exception_handler_size = NativeJump::instruction_size;
-const int JeandleAssembler::_deopt_handler_size     = 17;
+const int JeandleAssembler::_routine_stub_size = 0;
+
+// Handler sizes matching C2's HandlerImpl (see x86.ad):
+//   size_exception_handler() = NativeJump::instruction_size
+//   size_deopt_handler()     = NOT_LP64(10) LP64_ONLY(17)
+int JeandleAssembler::exception_handler_size() {
+  return NativeJump::instruction_size;
+}
+
+int JeandleAssembler::deopt_handler_size() {
+  return NOT_LP64(10) LP64_ONLY(17);
+}
 
 void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call) {
   assert(inst_offset >= 0, "invalid call instruction address");
@@ -206,7 +216,7 @@ int JeandleAssembler::emit_exception_handler() {
 }
 
 int JeandleAssembler::emit_deopt_handler() {
-  address base = __ start_a_stub(JeandleAssembler::_deopt_handler_size);
+  address base = __ start_a_stub(deopt_handler_size());
   if (base == nullptr) {
     JEANDLE_REPORT_ERROR_AND_RET("deopt handler stub overflow", 0);
   }
@@ -228,7 +238,7 @@ int JeandleAssembler::emit_deopt_handler() {
   __ pushptr(here.addr(), noreg);
 #endif
   __ jump(RuntimeAddress(JeandleRuntimeRoutine::get_routine_entry(JeandleRuntimeRoutine::_deopt_blob)));
-  assert(__ offset() - offset <= JeandleAssembler::_deopt_handler_size, "deopt handler stub overflow");
+  assert(__ offset() - offset <= deopt_handler_size(), "deopt handler stub overflow");
   __ end_a_stub();
   return offset;
 }
