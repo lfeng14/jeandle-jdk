@@ -35,6 +35,7 @@
 #include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "asm/macroAssembler.hpp"
 #include "ci/ciEnv.hpp"
+#include "code/nativeInst.hpp"
 #include "code/vmreg.inline.hpp"
 #include "interpreter/interpreter.hpp"
 #include "logging/log.hpp"
