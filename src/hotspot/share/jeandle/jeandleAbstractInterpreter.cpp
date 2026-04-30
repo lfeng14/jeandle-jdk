@@ -1235,9 +1235,17 @@ void JeandleAbstractInterpreter::if_icmp(llvm::CmpInst::Predicate p) {
   llvm::Value* r = _jvm->ipop();
   llvm::Value* l = _jvm->ipop();
   llvm::Value* cond = _ir_builder.CreateICmp(p, l, r);
+  JeandleBasicBlock* true_succ = bci2block()[_bytecodes.get_dest()];
+  JeandleBasicBlock* false_succ = bci2block()[_bytecodes.next_bci()];
+  if (true_succ->is_exception_handler()) {
+    merge_into_exception_handler(true_succ);
+  }
+  if (false_succ->is_exception_handler()) {
+    merge_into_exception_handler(false_succ);
+  }
   _ir_builder.CreateCondBr(cond,
-                           bci2block()[_bytecodes.get_dest()]->header_llvm_block(),
-                           bci2block()[_bytecodes.next_bci()]->header_llvm_block());
+                           true_succ->header_llvm_block(),
+                           false_succ->header_llvm_block());
 }
 
 void JeandleAbstractInterpreter::lcmp() {
@@ -1298,11 +1306,27 @@ void JeandleAbstractInterpreter::fcmp(BasicType type, bool true_if_unordered) {
   _jvm->ipush(_ir_builder.CreateSelect(negative_case, JeandleType::int_const(_ir_builder, -1), non_negative_case));
 }
 
+void JeandleAbstractInterpreter::merge_into_exception_handler(JeandleBasicBlock* handler_block) {
+  // Exception handlers expect a stack with one exception oop. Normal flow branches
+  // (goto/if/switch) have an empty stack at the branch point. Push a null placeholder
+  // to match the stack depth when merging from normal flow.
+  JeandleVMState* adjusted_state = _jvm->copy(true /* clear_stack */);
+  adjusted_state->apush(llvm::ConstantPointerNull::get(
+      llvm::cast<llvm::PointerType>(JeandleType::java2llvm(BasicType::T_OBJECT, *_context))));
+  if (!handler_block->merge_VM_state_from(adjusted_state, _ir_builder.GetInsertBlock(), _method)) {
+    JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(false, "failed to merge VM state into exception handler block from normal flow");
+  }
+}
+
 void JeandleAbstractInterpreter::goto_bci(int bci) {
   if (bci <= _bytecodes.cur_bci()) {
     add_safepoint_poll();
   }
-  _ir_builder.CreateBr(bci2block()[bci]->header_llvm_block());
+  JeandleBasicBlock* succ = bci2block()[bci];
+  if (succ->is_exception_handler()) {
+    merge_into_exception_handler(succ);
+  }
+  _ir_builder.CreateBr(succ->header_llvm_block());
 }
 
 void JeandleAbstractInterpreter::lookup_switch() {
