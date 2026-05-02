@@ -1310,9 +1310,7 @@ void JeandleAbstractInterpreter::merge_into_exception_handler(JeandleBasicBlock*
   // Exception handlers expect a stack with one exception oop. Normal flow branches
   // (goto/if/switch) have an empty stack at the branch point. Push a null placeholder
   // to match the stack depth when merging from normal flow.
-  JeandleVMState* adjusted_state = _jvm->copy(true /* clear_stack */);
-  adjusted_state->apush(llvm::ConstantPointerNull::get(
-      llvm::cast<llvm::PointerType>(JeandleType::java2llvm(BasicType::T_OBJECT, *_context))));
+  JeandleVMState* adjusted_state = _jvm->copy(false /* clear_stack */);
   if (!handler_block->merge_VM_state_from(adjusted_state, _ir_builder.GetInsertBlock(), _method)) {
     JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(false, "failed to merge VM state into exception handler block from normal flow");
   }
