@@ -1307,10 +1307,12 @@ void JeandleAbstractInterpreter::fcmp(BasicType type, bool true_if_unordered) {
 }
 
 void JeandleAbstractInterpreter::merge_into_exception_handler(JeandleBasicBlock* handler_block) {
-  // Exception handlers expect a stack with one exception oop. Normal flow branches
-  // (goto/if/switch) have an empty stack at the branch point. Push a null placeholder
-  // to match the stack depth when merging from normal flow.
-  JeandleVMState* adjusted_state = _jvm->copy(false /* clear_stack */);
+  // The bytecode verifier guarantees that all paths reaching the same BCI have
+  // consistent stack depth and types. So a normal flow branch (goto/if) targeting
+  // a handler block has the same stack layout as the exception path. We just need
+  // to merge the current VMState into the handler, bypassing the is_exception_handler()
+  // skip in the successor loop of interpret_block().
+  JeandleVMState* adjusted_state = _jvm->copy();
   if (!handler_block->merge_VM_state_from(adjusted_state, _ir_builder.GetInsertBlock(), _method)) {
     JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(false, "failed to merge VM state into exception handler block from normal flow");
   }
