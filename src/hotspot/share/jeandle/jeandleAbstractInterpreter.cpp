@@ -1348,12 +1348,19 @@ void JeandleAbstractInterpreter::lookup_switch() {
   }
 
   llvm::Value* key = _jvm->ipop();
-  llvm::BasicBlock* default_block = bci2block()[cur_bci + sw.default_offset()]->header_llvm_block();
-  llvm::SwitchInst* switch_inst = _ir_builder.CreateSwitch(key, default_block, length);
+  JeandleBasicBlock* default_block = bci2block()[cur_bci + sw.default_offset()];
+  if (default_block->is_exception_handler()) {
+    merge_into_exception_handler(default_block);
+  }
+  llvm::SwitchInst* switch_inst = _ir_builder.CreateSwitch(key, default_block->header_llvm_block(), length);
 
   for (int i = 0; i < length; i++) {
     LookupswitchPair pair = sw.pair_at(i);
-    switch_inst->addCase(JeandleType::int_const(_ir_builder, pair.match()), bci2block()[cur_bci + pair.offset()]->header_llvm_block());
+    JeandleBasicBlock* case_block = bci2block()[cur_bci + pair.offset()];
+    if (case_block->is_exception_handler()) {
+      merge_into_exception_handler(case_block);
+    }
+    switch_inst->addCase(JeandleType::int_const(_ir_builder, pair.match()), case_block->header_llvm_block());
   }
 }
 
@@ -1376,12 +1383,18 @@ void JeandleAbstractInterpreter::table_switch() {
   }
 
   llvm::Value* idx = _jvm->ipop();
-  llvm::BasicBlock* default_block = bci2block()[cur_bci + sw.default_offset()]->header_llvm_block();
-  llvm::SwitchInst* switch_inst = _ir_builder.CreateSwitch(idx, default_block, length);
+  JeandleBasicBlock* default_block = bci2block()[cur_bci + sw.default_offset()];
+  if (default_block->is_exception_handler()) {
+    merge_into_exception_handler(default_block);
+  }
+  llvm::SwitchInst* switch_inst = _ir_builder.CreateSwitch(idx, default_block->header_llvm_block(), length);
 
   for (int i = 0; i < length; i++) {
-    llvm::BasicBlock* case_block = bci2block()[cur_bci + sw.dest_offset_at(i)]->header_llvm_block();
-    switch_inst->addCase(JeandleType::int_const(_ir_builder, i + low), case_block);
+    JeandleBasicBlock* case_block = bci2block()[cur_bci + sw.dest_offset_at(i)];
+    if (case_block->is_exception_handler()) {
+      merge_into_exception_handler(case_block);
+    }
+    switch_inst->addCase(JeandleType::int_const(_ir_builder, i + low), case_block->header_llvm_block());
   }
 }
 
