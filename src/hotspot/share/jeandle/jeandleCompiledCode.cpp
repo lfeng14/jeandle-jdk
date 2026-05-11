@@ -62,8 +62,13 @@ static constexpr int PROLOG_RESERVED_SIZE = 2048;
 // - Worst case: expand_locs() reallocates (doubles capacity), but the above
 //   sizing makes this rare
 static constexpr int INITIAL_RELOC_CAPACITY = 256;
-// Marginal slop for handler and per-stub allocation (matches C2's MAX_stubs_size)
-static constexpr int STUB_SLOP_SIZE = 128;
+// Slop to cover uncounted stub allocations:
+// - EXTERNAL_CALL trampoline stubs (not in stackmaps, created during reloc resolution)
+// - Shared trampoline stubs from finalize_stubs() for gc-leaf routine calls
+// - Alignment padding within the stubs section
+// - Minor estimation errors
+// Reduces the chance of CodeBuffer::expand() which reallocates and copies the entire blob.
+static constexpr int STUB_SLOP_SIZE = 256;
 
 // Decide whether to emit a stack overflow check for the compiled entry based on
 // Java call presence and frame size pressure (skip stub compilations).
@@ -144,8 +149,23 @@ void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, i
     for (auto record = stackmaps.records_begin(); record != stackmaps.records_end(); ++record) {
       if (record->getID() < _non_routine_call_sites.size()) {
         CallSiteInfo *call_info = _non_routine_call_sites[record->getID()];
-        if (call_info && call_info->type() == JeandleCompiledCall::STATIC_CALL) {
-          stubs_size += JeandleAssembler::_call_stub_size;
+        if (call_info) {
+          switch (call_info->type()) {
+            case JeandleCompiledCall::STATIC_CALL:
+              // Static call stub (method metadata + jump target) plus trampoline
+              // stub on platforms that need it (e.g., aarch64 with far_branches).
+              // _routine_stub_size is 0 on x86 (no trampoline needed).
+              stubs_size += JeandleAssembler::_call_stub_size + JeandleAssembler::_routine_stub_size;
+              break;
+            case JeandleCompiledCall::DYNAMIC_CALL:
+              // Inline cache trampoline stub on platforms that need it.
+              // _routine_stub_size is 0 on x86 (ic_call is inline).
+              stubs_size += JeandleAssembler::_routine_stub_size;
+              break;
+            default:
+              // STUB_C_CALL and other types don't allocate stub section space.
+              break;
+          }
         }
       } else {
         // _routine_call_sites only contains routine calls.
@@ -167,7 +187,8 @@ void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, i
     stubs_size += JeandleAssembler::deopt_handler_size();
   }
 
-  // Slop to cover alignment padding within the stubs section and minor
+  // Slop to cover EXTERNAL_CALL trampoline stubs (not in stackmaps), shared
+  // trampoline stubs from finalize_stubs(), alignment padding, and minor
   // estimation errors. Reduces the chance of CodeBuffer::expand() which
   // reallocates and copies the entire blob.
   stubs_size += STUB_SLOP_SIZE;
