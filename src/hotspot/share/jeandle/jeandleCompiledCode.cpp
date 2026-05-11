@@ -286,8 +286,8 @@ void JeandleCompiledCode::finalize() {
          "(initial_req=%d, insts=%d, stubs=%d, consts=%d)",
          total_req,
          (int)_code_buffer.insts_size(),
-         (int)_code_buffer.stubs_size(),
-         (int)_code_buffer.consts_size());
+         (int)_code_buffer.stubs()->size(),
+         (int)_code_buffer.consts()->size());
 }
 
 void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
