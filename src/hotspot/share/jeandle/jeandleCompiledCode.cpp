@@ -47,8 +47,21 @@ inline void swap(JeandleReloc*& a, JeandleReloc*& b) {
 }
 
 // Code buffer initialization constants (following C2's PhaseOutput::init_buffer pattern)
-static constexpr int PROLOG_RESERVED_SIZE  = 2048;
-static constexpr int RELOC_SIZE_MULTIPLIER = 20;
+static constexpr int PROLOG_RESERVED_SIZE = 2048;
+// Initial reloc capacity (in bytes) passed to CodeBuffer::initialize as locs_size.
+//
+// CodeBuffer internally divides by sizeof(relocInfo)=2 to get the element count,
+// then applies a floor of insts_size/16 (see CodeSection::initialize_locs).
+//
+// The combined effect ensures adequate capacity for all method sizes:
+// - Small methods (<2KB code): 256/2=128 records, far exceeding typical reloc
+//   counts (a 2KB method has ~10 call sites + ~10 const/oop refs, each expanding
+//   to 1-3 relocInfo records = ~60 records, well within 128)
+// - Medium/large methods: the insts_size/16 floor dominates, providing 256+
+//   records for 4KB code, 1024+ records for 16KB code
+// - Worst case: expand_locs() reallocates (doubles capacity), but the above
+//   sizing makes this rare
+static constexpr int INITIAL_RELOC_CAPACITY = 256;
 // Marginal slop for handler and per-stub allocation (matches C2's MAX_stubs_size)
 static constexpr int STUB_SLOP_SIZE = 128;
 
@@ -141,18 +154,22 @@ void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, i
     }
   }
 
-  // Add handler sizes following C2's init_buffer() pattern:
-  //   exception_handler_req = size_exception_handler() + STUB_SLOP_SIZE
-  //   deopt_handler_req     = size_deopt_handler()     + STUB_SLOP_SIZE
-  stubs_size += JeandleAssembler::exception_handler_size() + STUB_SLOP_SIZE;
-  stubs_size += JeandleAssembler::deopt_handler_size() + STUB_SLOP_SIZE;
+  // Handler sizes. Jeandle pre-allocates all stub space including handlers in
+  // stubs_size, so start_a_stub() rarely needs to trigger CodeBuffer::expand()
+  // (which reallocates and copies the entire blob). C2 adds handlers to total_req
+  // but not stub_req, relying on expand at runtime, hence needs per-handler slop.
+  // Jeandle's pre-allocation approach avoids that overhead.
+  stubs_size += JeandleAssembler::exception_handler_size();
+  stubs_size += JeandleAssembler::deopt_handler_size();
 
   // If method has MethodHandle invokes, add a second deopt handler.
   if (_has_method_handle_invoke) {
-    stubs_size += JeandleAssembler::deopt_handler_size() + STUB_SLOP_SIZE;
+    stubs_size += JeandleAssembler::deopt_handler_size();
   }
 
-  // Ensure per-stub margin (matches C2's stub_req += MAX_stubs_size).
+  // Slop to cover alignment padding within the stubs section and minor
+  // estimation errors. Reduces the chance of CodeBuffer::expand() which
+  // reallocates and copies the entire blob.
   stubs_size += STUB_SLOP_SIZE;
 }
 
@@ -173,14 +190,14 @@ void JeandleCompiledCode::finalize() {
   int stubs_size = 0;
   estimate_codebuffer_component_sizes(consts_size, stubs_size);
 
-  // The extra spacing after the code is necessary on some platforms.
-  // Sometimes we need to patch in a jump after the last instruction,
-  // if the nmethod has been deoptimized. (See 4932387, 4894843.)
+  // C2 reserves NativeCall::instruction_size after the instruction section for
+  // patching a jump at the nmethod entry when it is made not-entrant (deoptimized
+  // or dependency invalidated). See NativeJump::patch_verified_entry in nmethod.cpp.
   int pad_req = NativeCall::instruction_size;
 
   int total_req = (int)code_size + consts_size + PROLOG_RESERVED_SIZE + pad_req + stubs_size;
   _code_buffer.initialize(total_req,
-                          RELOC_SIZE_MULTIPLIER * (sizeof(relocInfo) + relocInfo::length_limit),
+                          INITIAL_RELOC_CAPACITY,
                           stubs_size,
                           _env->oop_recorder());
   if (_code_buffer.blob() == nullptr) {
@@ -262,6 +279,15 @@ void JeandleCompiledCode::finalize() {
       RETURN_VOID_ON_JEANDLE_ERROR();
     }
   }
+
+  // Verify CodeBuffer pre-allocation was sufficient (no expand needed).
+  assert(_code_buffer.before_expand() == nullptr,
+         "CodeBuffer expanded during code emission, pre-allocation was insufficient "
+         "(initial_req=%d, insts=%d, stubs=%d, consts=%d)",
+         total_req,
+         (int)_code_buffer.insts_size(),
+         (int)_code_buffer.stubs_size(),
+         (int)_code_buffer.consts_size());
 }
 
 void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
