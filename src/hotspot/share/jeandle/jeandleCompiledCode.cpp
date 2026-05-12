@@ -46,28 +46,14 @@ inline void swap(JeandleReloc*& a, JeandleReloc*& b) {
   std::swap(a, b);
 }
 
-// Code buffer initialization constants (following C2's PhaseOutput::init_buffer pattern)
+// CodeBuffer initialization constants (following C2's PhaseOutput::init_buffer pattern).
 static constexpr int PROLOG_RESERVED_SIZE = 2048;
-// Initial reloc capacity (in bytes) passed to CodeBuffer::initialize as locs_size.
-//
-// CodeBuffer internally divides by sizeof(relocInfo)=2 to get the element count,
-// then applies a floor of insts_size/16 (see CodeSection::initialize_locs).
-//
-// The combined effect ensures adequate capacity for all method sizes:
-// - Small methods (<2KB code): 256/2=128 records, far exceeding typical reloc
-//   counts (a 2KB method has ~10 call sites + ~10 const/oop refs, each expanding
-//   to 1-3 relocInfo records = ~60 records, well within 128)
-// - Medium/large methods: the insts_size/16 floor dominates, providing 256+
-//   records for 4KB code, 1024+ records for 16KB code
-// - Worst case: expand_locs() reallocates (doubles capacity), but the above
-//   sizing makes this rare
+// Reloc capacity (in bytes). CodeBuffer divides by sizeof(relocInfo)=2 for the
+// element count. For large methods the actual count is max(256/2, insts_size/16),
+// so this 256 only serves as the lower bound for small methods.
 static constexpr int INITIAL_RELOC_CAPACITY = 256;
-// Slop to cover uncounted stub allocations:
-// - EXTERNAL_CALL trampoline stubs (not in stackmaps, created during reloc resolution)
-// - Shared trampoline stubs from finalize_stubs() for gc-leaf routine calls
-// - Alignment padding within the stubs section
-// - Minor estimation errors
-// Reduces the chance of CodeBuffer::expand() which reallocates and copies the entire blob.
+// Slop for uncounted stubs (EXTERNAL_CALL trampolines, finalize_stubs() shared
+// trampolines, alignment padding, estimation errors).
 static constexpr int STUB_SLOP_SIZE = 256;
 
 // Decide whether to emit a stack overflow check for the compiled entry based on
@@ -152,18 +138,14 @@ void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, i
         if (call_info) {
           switch (call_info->type()) {
             case JeandleCompiledCall::STATIC_CALL:
-              // Static call stub (method metadata + jump target) plus trampoline
-              // stub on platforms that need it (e.g., aarch64 with far_branches).
-              // _routine_stub_size is 0 on x86 (no trampoline needed).
+              // emit_static_call_stub + patch_static_call_site trampoline.
               stubs_size += JeandleAssembler::_call_stub_size + JeandleAssembler::_routine_stub_size;
               break;
             case JeandleCompiledCall::DYNAMIC_CALL:
-              // Inline cache trampoline stub on platforms that need it.
-              // _routine_stub_size is 0 on x86 (ic_call is inline).
+              // patch_ic_call_site trampoline.
               stubs_size += JeandleAssembler::_routine_stub_size;
               break;
             default:
-              // STUB_C_CALL and other types don't allocate stub section space.
               break;
           }
         }
@@ -174,23 +156,14 @@ void JeandleCompiledCode::estimate_codebuffer_component_sizes(int &const_size, i
     }
   }
 
-  // Handler sizes. Jeandle pre-allocates all stub space including handlers in
-  // stubs_size, so start_a_stub() rarely needs to trigger CodeBuffer::expand()
-  // (which reallocates and copies the entire blob). C2 adds handlers to total_req
-  // but not stub_req, relying on expand at runtime, hence needs per-handler slop.
-  // Jeandle's pre-allocation approach avoids that overhead.
+  // Handlers.
   stubs_size += JeandleAssembler::exception_handler_size();
   stubs_size += JeandleAssembler::deopt_handler_size();
-
-  // If method has MethodHandle invokes, add a second deopt handler.
   if (_has_method_handle_invoke) {
     stubs_size += JeandleAssembler::deopt_handler_size();
   }
 
-  // Slop to cover EXTERNAL_CALL trampoline stubs (not in stackmaps), shared
-  // trampoline stubs from finalize_stubs(), alignment padding, and minor
-  // estimation errors. Reduces the chance of CodeBuffer::expand() which
-  // reallocates and copies the entire blob.
+  // Slop for uncounted stubs.
   stubs_size += STUB_SLOP_SIZE;
 }
 
@@ -206,14 +179,12 @@ void JeandleCompiledCode::finalize() {
   RETURN_VOID_ON_JEANDLE_ERROR();
   assert(_frame_size > 0, "frame size must be positive");
 
-  // Estimate component sizes following C2's PhaseOutput::init_buffer() pattern.
+  // Estimate component sizes following C2's PhaseOutput::init_buffer().
   int consts_size = 0;
   int stubs_size = 0;
   estimate_codebuffer_component_sizes(consts_size, stubs_size);
 
-  // C2 reserves NativeCall::instruction_size after the instruction section for
-  // patching a jump at the nmethod entry when it is made not-entrant (deoptimized
-  // or dependency invalidated). See NativeJump::patch_verified_entry in nmethod.cpp.
+  // Pad for patching nmethod entry when made not-entrant (same as C2).
   int pad_req = NativeCall::instruction_size;
 
   int total_req = (int)code_size + consts_size + PROLOG_RESERVED_SIZE + pad_req + stubs_size;
