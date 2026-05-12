@@ -35,9 +35,6 @@
 const int JeandleAssembler::_call_stub_size    = 13 * NativeInstruction::instruction_size;
 const int JeandleAssembler::_routine_stub_size = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size;
 
-// Handler sizes matching C2's HandlerImpl (see aarch64.ad):
-//   size_exception_handler() = MacroAssembler::far_codestub_branch_size()
-//   size_deopt_handler()     = NativeInstruction::instruction_size + MacroAssembler::far_codestub_branch_size()
 int JeandleAssembler::exception_handler_size() {
   return MacroAssembler::far_codestub_branch_size();
 }

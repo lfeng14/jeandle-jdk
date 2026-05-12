@@ -36,9 +36,6 @@ const int JeandleAssembler::_call_stub_size    = 28;
 // No need to emit routine stub on x86.
 const int JeandleAssembler::_routine_stub_size = 0;
 
-// Handler sizes matching C2's HandlerImpl (see x86.ad):
-//   size_exception_handler() = NativeJump::instruction_size
-//   size_deopt_handler()     = NOT_LP64(10) LP64_ONLY(17)
 int JeandleAssembler::exception_handler_size() {
   return NativeJump::instruction_size;
 }
