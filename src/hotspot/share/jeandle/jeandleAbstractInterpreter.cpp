@@ -25,6 +25,7 @@
 #include "llvm/IR/Jeandle/GCStrategy.h"
 #include "llvm/IR/Jeandle/JavaType.h"
 #include "llvm/IR/Jeandle/Metadata.h"
+#include "llvm/IR/InstIterator.h"
 
 
 #include "jeandle/jeandleAbstractInterpreter.hpp"
@@ -1865,19 +1866,14 @@ void JeandleAbstractInterpreter::invoke() {
   // breaking the deopt state encoding.  Prevent inlining in that case.
   if (auto *callee_func = llvm::dyn_cast<llvm::Function>(callee.getCallee())) {
     if (!callee_func->isDeclaration()) {
-      bool has_deopt = false;
-      for (auto &BB : *callee_func) {
-        for (auto &I : BB) {
-          if (auto *CB = llvm::dyn_cast<llvm::CallBase>(&I)) {
-            if (CB->getOperandBundle(llvm::LLVMContext::OB_deopt)) {
-              has_deopt = true;
-              break;
-            }
+      for (auto &I : instructions(callee_func)) {
+        if (auto *CB = llvm::dyn_cast<llvm::CallBase>(&I)) {
+          if (CB->getOperandBundle(llvm::LLVMContext::OB_deopt)) {
+            invoke->setIsNoInline();
+            break;
           }
         }
-        if (has_deopt) break;
       }
-      if (has_deopt) invoke->setIsNoInline();
     }
   }
 
