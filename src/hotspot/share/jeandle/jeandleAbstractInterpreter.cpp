@@ -1860,6 +1860,27 @@ void JeandleAbstractInterpreter::invoke() {
   llvm::InvokeInst* invoke = _ir_builder.CreateInvoke(callee, dispatched._normal_dest, dispatched._unwind_dest, args,
                                                       {create_current_deopt_bundle()});
 
+  // If the callee contains any calls with "deopt" operand bundles, inlining
+  // would cause the parent's deopt bundle to be prepended to the child's,
+  // breaking the deopt state encoding.  Prevent inlining in that case.
+  if (auto *callee_func = llvm::dyn_cast<llvm::Function>(callee.getCallee())) {
+    if (!callee_func->isDeclaration()) {
+      bool has_deopt = false;
+      for (auto &BB : *callee_func) {
+        for (auto &I : BB) {
+          if (auto *CB = llvm::dyn_cast<llvm::CallBase>(&I)) {
+            if (CB->getOperandBundle(llvm::LLVMContext::OB_deopt)) {
+              has_deopt = true;
+              break;
+            }
+          }
+        }
+        if (has_deopt) break;
+      }
+      if (has_deopt) invoke->setIsNoInline();
+    }
+  }
+
   // Continue to interpret the remaining bytecodes in the current JeandleBasicBlock at dispatched._normal_dest.
   _ir_builder.SetInsertPoint(dispatched._normal_dest);
 
