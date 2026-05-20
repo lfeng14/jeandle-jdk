@@ -296,6 +296,15 @@ class JeandleAbstractInterpreter : public StackObj {
   // Cumulative traps
   uint* _trap_hist;
 
+  // Cached MethodData pointer, initialized before bytecode iteration
+  // to avoid VM_ENTRY_MARK during IR generation.
+  ciMethodData* _cached_mdo;
+
+  // Set of successors whose normal-flow branch was redirected to an
+  // intermediate uncommon_trap block. Their merge_VM_state_from and
+  // add_to_work_list are skipped in post-processing to avoid creating
+  // dangling PHI nodes.
+
   // Reuse stack allocation for monitor: each monitor nesting level maps to a
   // fixed BasicLock slot on the stack. When the same nesting level is entered
   // again, the existing slot is reused rather than allocating a new one, so
@@ -439,6 +448,12 @@ class JeandleAbstractInterpreter : public StackObj {
   void boundary_check(llvm::Value* array_oop, llvm::Value* index);
 
   void uncommon_trap(Deoptimization::DeoptReason, Deoptimization::DeoptAction, llvm::BasicBlock* insert_block = nullptr);
+
+  // Check branch profile for the current bci. Returns:
+  //   0 — both taken and untaken paths have profile → normal branch.
+  //   1 — taken path is cold → put uncommon trap on taken.
+  //   2 — untaken path is cold → put uncommon trap on untaken.
+  int branch_profile_uncommon();
 
   void return_current(llvm::Value* value);
 

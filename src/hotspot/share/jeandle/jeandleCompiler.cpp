@@ -136,6 +136,10 @@ void JeandleCompiler::initialize() {
 
 void JeandleCompiler::compile_method(ciEnv* env, ciMethod* target, int entry_bci, bool install_code, DirectiveSet* directive) {
   ResourceMark rm;
+  tty->print_cr("JEANDLE_COMPILE: %s.%s entry_bci=%d install=%d",
+                target->holder()->name()->as_utf8(),
+                target->name()->as_utf8(),
+                entry_bci, (int)install_code);
   JeandleCompilation compilation(target_machine(), data_layout(), env, target, entry_bci, install_code, _template_buffer.get());
 }
 
