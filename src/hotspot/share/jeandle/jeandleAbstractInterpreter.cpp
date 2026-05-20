@@ -679,7 +679,7 @@ JeandleAbstractInterpreter::JeandleAbstractInterpreter(ciMethod* method,
                                                        _work_list(),
                                                        _sync_lock(LockValue()),
                                                        _trap_hist(trap_hist),
-                                                       _cached_mdo(nullptr),
+                                                       _cached_mdo(method->method_data()),
                                                        _oop_idx(0) {
   // Fill basic blocks with LLVM IR.
   interpret();
@@ -1052,11 +1052,19 @@ void JeandleAbstractInterpreter::interpret_block(JeandleBasicBlock* block) {
   Bytecodes::Code code = Bytecodes::_illegal;
 
   if (block->is_set(JeandleBasicBlock::always_uncommon_trap)) {
+    // This block is intentionally shrunk to a deopt entry. Its normal
+    // bytecodes are not IR-generated; post-processing skips merge and
+    // work-list population for normal successors (only exception-handler
+    // successors are forwarded).
     _bytecodes.force_bci(block->start_bci());
-    Deoptimization::DeoptReason reason = block->is_exception_handler()
-        ? Deoptimization::Reason_unloaded
-        : Deoptimization::Reason_unstable_if;
+
+    const Deoptimization::DeoptReason reason =
+        block->is_exception_handler()
+            ? Deoptimization::Reason_unloaded
+            : Deoptimization::Reason_unstable_if;
+
     uncommon_trap(reason, Deoptimization::Action_reinterpret);
+
     block->set(JeandleBasicBlock::is_compiled);
     return;
   }
@@ -1485,26 +1493,45 @@ void JeandleAbstractInterpreter::increment() {
   _jvm->istore(_bytecodes.get_index(), result);
 }
 
-int JeandleAbstractInterpreter::branch_profile_uncommon() {
+static const int kMinBranchSamplesForColdPath = 40;
+
+ColdPathKind JeandleAbstractInterpreter::branch_profile_uncommon() {
   ciMethodData* md = _cached_mdo;
   if (md == nullptr || md->is_empty() || !md->is_mature()) {
-    return 0;
+    return ColdNone;
   }
+
   ciProfileData* data = md->bci_to_data(_bytecodes.cur_bci());
   if (data == nullptr || !data->is_JumpData()) {
-    return 0;
+    return ColdNone;
   }
-  int taken = data->as_JumpData()->taken();
-  int not_taken = data->is_BranchData() ? data->as_BranchData()->not_taken() : 0;
-  if (taken + not_taken < 40) {
-    return 0;
+
+  const int taken     = data->as_JumpData()->taken();
+  const int not_taken = data->is_BranchData()
+                      ? data->as_BranchData()->not_taken()
+                      : 0;
+  const int total = taken + not_taken;
+  if (total < kMinBranchSamplesForColdPath) {
+    return ColdNone;
   }
-  if (too_many_traps(_method, _bytecodes.cur_bci(), Deoptimization::Reason_unstable_if)) {
-    return 0;
+
+  if (!can_speculate_unstable_if()) {
+    return ColdNone;
   }
-  if (taken == 0 && not_taken > 0) return 1;
-  if (not_taken == 0 && taken > 0) return 2;
-  return 0;
+
+  if (taken == 0 && not_taken > 0) {
+    return ColdTakenPath;
+  }
+  if (not_taken == 0 && taken > 0) {
+    return ColdUntakenPath;
+  }
+  return ColdNone;
+}
+
+bool JeandleAbstractInterpreter::can_speculate_unstable_if() {
+  return !too_many_traps(_method,
+                         _bytecodes.cur_bci(),
+                         Deoptimization::Reason_unstable_if);
 }
 
 void JeandleAbstractInterpreter::if_zero(llvm::CmpInst::Predicate p) {
@@ -1516,13 +1543,16 @@ void JeandleAbstractInterpreter::if_zero(llvm::CmpInst::Predicate p) {
   JeandleBasicBlock* taken_succ = bci2block()[_bytecodes.get_dest()];
   JeandleBasicBlock* fallthrough_succ = bci2block()[_bytecodes.next_bci()];
 
-  int cold_path = branch_profile_uncommon();
-  if (cold_path == 1) {
-    // taken path is cold → mark it for uncommon trap
-    taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
-  } else if (cold_path == 2) {
-    // fallthrough path is cold → mark it for uncommon trap
-    fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+  switch (branch_profile_uncommon()) {
+    case ColdTakenPath:
+      taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdUntakenPath:
+      fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdNone:
+    default:
+      break;
   }
   _ir_builder.CreateCondBr(cond,
                            taken_succ->header_llvm_block(),
@@ -1539,11 +1569,16 @@ void JeandleAbstractInterpreter::if_icmp(llvm::CmpInst::Predicate p) {
   JeandleBasicBlock* taken_succ = bci2block()[_bytecodes.get_dest()];
   JeandleBasicBlock* fallthrough_succ = bci2block()[_bytecodes.next_bci()];
 
-  int cold_path = branch_profile_uncommon();
-  if (cold_path == 1) {
-    taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
-  } else if (cold_path == 2) {
-    fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+  switch (branch_profile_uncommon()) {
+    case ColdTakenPath:
+      taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdUntakenPath:
+      fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdNone:
+    default:
+      break;
   }
   _ir_builder.CreateCondBr(cond,
                            taken_succ->header_llvm_block(),
@@ -1570,11 +1605,16 @@ void JeandleAbstractInterpreter::if_acmp(llvm::CmpInst::Predicate p) {
   JeandleBasicBlock* taken_succ = bci2block()[_bytecodes.get_dest()];
   JeandleBasicBlock* fallthrough_succ = bci2block()[_bytecodes.next_bci()];
 
-  int cold_path = branch_profile_uncommon();
-  if (cold_path == 1) {
-    taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
-  } else if (cold_path == 2) {
-    fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+  switch (branch_profile_uncommon()) {
+    case ColdTakenPath:
+      taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdUntakenPath:
+      fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdNone:
+    default:
+      break;
   }
   _ir_builder.CreateCondBr(cond,
                            taken_succ->header_llvm_block(),
@@ -1590,11 +1630,16 @@ void JeandleAbstractInterpreter::if_null(llvm::CmpInst::Predicate p) {
   JeandleBasicBlock* taken_succ = bci2block()[_bytecodes.get_dest()];
   JeandleBasicBlock* fallthrough_succ = bci2block()[_bytecodes.next_bci()];
 
-  int cold_path = branch_profile_uncommon();
-  if (cold_path == 1) {
-    taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
-  } else if (cold_path == 2) {
-    fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+  switch (branch_profile_uncommon()) {
+    case ColdTakenPath:
+      taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdUntakenPath:
+      fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdNone:
+    default:
+      break;
   }
   _ir_builder.CreateCondBr(cond,
                            taken_succ->header_llvm_block(),
@@ -3575,8 +3620,7 @@ bool JeandleAbstractInterpreter::too_many_traps(Deoptimization::DeoptReason reas
 }
 
 void JeandleAbstractInterpreter::accumulate_trap_counts_from_mdo(ciMethod* method) {
-  ciMethodData* md = method->method_data();
-  _cached_mdo = md;  // Cache for use by branch_profile_uncommon
+  ciMethodData* md = _cached_mdo;
 
   for (uint reason = 0; reason < md->trap_reason_limit(); reason++) {
     uint md_count = md->trap_count(reason);

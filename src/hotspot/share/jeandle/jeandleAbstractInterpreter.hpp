@@ -260,6 +260,14 @@ class BasicBlockBuilder : public JeandleCompilationResourceObj {
   bool is_osr() { return _entry_bci != InvocationEntryBci; }
 };
 
+// Returns which successor of the current conditional branch should be
+// treated as a cold path based on MDO profiling.
+enum ColdPathKind {
+  ColdNone        = 0,
+  ColdTakenPath   = 1,
+  ColdUntakenPath = 2
+};
+
 // Convert java bytecodes to llvm ir.
 class JeandleAbstractInterpreter : public StackObj {
  public:
@@ -296,14 +304,9 @@ class JeandleAbstractInterpreter : public StackObj {
   // Cumulative traps
   uint* _trap_hist;
 
-  // Cached MethodData pointer, initialized before bytecode iteration
-  // to avoid VM_ENTRY_MARK during IR generation.
-  ciMethodData* _cached_mdo;
-
-  // Set of successors whose normal-flow branch was redirected to an
-  // intermediate uncommon_trap block. Their merge_VM_state_from and
-  // add_to_work_list are skipped in post-processing to avoid creating
-  // dangling PHI nodes.
+  // Cached MethodData pointer for the current method, initialized before
+  // bytecode iteration and only used during IR generation.
+  ciMethodData* const _cached_mdo;
 
   // Reuse stack allocation for monitor: each monitor nesting level maps to a
   // fixed BasicLock slot on the stack. When the same nesting level is entered
@@ -449,11 +452,14 @@ class JeandleAbstractInterpreter : public StackObj {
 
   void uncommon_trap(Deoptimization::DeoptReason, Deoptimization::DeoptAction, llvm::BasicBlock* insert_block = nullptr);
 
-  // Check branch profile for the current bci. Returns:
-  //   0 — both taken and untaken paths have profile → normal branch.
-  //   1 — taken path is cold → put uncommon trap on taken.
-  //   2 — untaken path is cold → put uncommon trap on untaken.
-  int branch_profile_uncommon();
+  // Query branch profile for the current bci and return which successor
+  // (taken or untaken) is cold (zero count). Returns ColdNone when both
+  // paths have non-zero profile counts, or when profile data is insufficient.
+  ColdPathKind branch_profile_uncommon();
+
+  // Returns true if the current bci hasn't triggered too many
+  // Reason_unstable_if deoptimizations.
+  bool can_speculate_unstable_if();
 
   void return_current(llvm::Value* value);
 
