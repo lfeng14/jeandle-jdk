@@ -27,12 +27,14 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 
 #include "jeandle/jeandleCompilation.hpp"
 #include "jeandle/jeandleType.hpp"
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
+#include "jeandle/jeandleProfile.hpp"
 #include "ci/ciMethodBlocks.hpp"
 #include "ci/ciTypeFlow.hpp"
 #include "ci/compilerInterface.hpp"
@@ -164,6 +166,8 @@ class JeandleBasicBlock : public JeandleCompilationResourceObj {
     assert(successor != nullptr, "successor can not be null");
     _successors.push_back(successor);
   }
+  void prune_successor(JeandleBasicBlock* successor);
+  bool is_pruned_successor(JeandleBasicBlock* successor) const;
 
   llvm::SmallVector<JeandleBasicBlock*, 8>& predecessors() { return _predecessors; }
   void add_predecessor(JeandleBasicBlock* predecessor) {
@@ -204,6 +208,7 @@ class JeandleBasicBlock : public JeandleCompilationResourceObj {
   // Use vector to allow duplicate predecessors/successors, except for exception handlers.
   llvm::SmallVector<JeandleBasicBlock*, 8> _predecessors;
   llvm::SmallVector<JeandleBasicBlock*, 8> _successors;
+  llvm::SmallVector<JeandleBasicBlock*, 2> _pruned_successors;
 
   llvm::BasicBlock* _header_llvm_block;
   llvm::BasicBlock* _tail_llvm_block;
@@ -271,6 +276,7 @@ class JeandleAbstractInterpreter : public StackObj {
 
  private:
   ciMethod* _method;
+  JeandleProfile _profile;
   llvm::Function* _llvm_func;
   int _entry_bci;
   llvm::LLVMContext* _context;
@@ -337,6 +343,9 @@ class JeandleAbstractInterpreter : public StackObj {
   void if_icmp(llvm::CmpInst::Predicate p);
   void if_acmp(llvm::CmpInst::Predicate p);
   void if_null(llvm::CmpInst::Predicate p);
+  void emit_if_branch(llvm::Value* cond, llvm::CmpInst::Predicate p, JeandleVMState* deopt_state);
+  bool try_emit_unstable_if_trap(llvm::Value* cond, JeandleVMState* deopt_state);
+  void attach_branch_weights(llvm::BranchInst* br, int bci, llvm::CmpInst::Predicate p);
   void fcmp(BasicType type, bool true_if_unordered);
   void lcmp();
   void merge_into_exception_handler(JeandleBasicBlock* handler_block);
@@ -344,6 +353,16 @@ class JeandleAbstractInterpreter : public StackObj {
   void lookup_switch();
   void table_switch();
   void invoke();
+  void attach_profile_branch_weights(llvm::BranchInst* br, uint hot_count, uint cold_count);
+  llvm::BasicBlock* emit_profile_uncommon_trap_guard(llvm::Value* hot_condition,
+                                                     const char* name,
+                                                     int bci,
+                                                     uint hot_count,
+                                                     uint cold_count,
+                                                     Deoptimization::DeoptReason reason,
+                                                     Deoptimization::DeoptAction action,
+                                                     JeandleVMState* deopt_state = nullptr,
+                                                     int deopt_bci = -1);
   bool inline_intrinsic(const ciMethod* target);
   void stack_op(Bytecodes::Code code);
   void shift_op(BasicType type, Bytecodes::Code code);
@@ -366,6 +385,7 @@ class JeandleAbstractInterpreter : public StackObj {
                                    llvm::ArrayRef<llvm::OperandBundleDef> deopt_bundle = {});
 
   llvm::OperandBundleDef create_current_deopt_bundle();
+  llvm::OperandBundleDef create_deopt_bundle(JeandleVMState* jvm, int bci);
 
   void add_safepoint_poll();
 
@@ -438,7 +458,11 @@ class JeandleAbstractInterpreter : public StackObj {
 
   void boundary_check(llvm::Value* array_oop, llvm::Value* index);
 
-  void uncommon_trap(Deoptimization::DeoptReason, Deoptimization::DeoptAction, llvm::BasicBlock* insert_block = nullptr);
+  void uncommon_trap(Deoptimization::DeoptReason,
+                     Deoptimization::DeoptAction,
+                     llvm::BasicBlock* insert_block = nullptr,
+                     JeandleVMState* deopt_state = nullptr,
+                     int deopt_bci = -1);
 
   void return_current(llvm::Value* value);
 
