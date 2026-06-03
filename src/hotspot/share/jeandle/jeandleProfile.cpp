@@ -64,7 +64,10 @@ bool JeandleProfile::has_trap_at(int bci, Deoptimization::DeoptReason reason) co
   // Treat the conservative "maybe trapped here" answer as a real trap for
   // speculation gating. Metadata-only uses such as branch_weights do not need
   // this guard; uncommon-trap/speculative transforms do.
-  return _mdo->has_trap_at(bci, nullptr, reason) != 0;
+  // For speculate reasons, ciMethodData::has_trap_at requires a non-null method
+  // to look up the speculative extra-data area.
+  ciMethod* trap_method = Deoptimization::reason_is_speculate(reason) ? _method : nullptr;
+  return _mdo->has_trap_at(bci, trap_method, reason) != 0;
 }
 
 bool JeandleProfile::has_too_many_traps(Deoptimization::DeoptReason reason) const {

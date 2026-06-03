@@ -1406,21 +1406,34 @@ void JeandleAbstractInterpreter::interpret_block(JeandleBasicBlock* block) {
   }
 
   // Add all successors to work list and set up their JeandleVMStates.
+  // A single LLVM block may have multiple edges to the same successor (e.g.,
+  // switch with several cases landing on the same target).  LLVM counts each
+  // edge as a separate predecessor for PHI validation, so we must add one
+  // incoming entry per edge rather than per unique successor.
   llvm::SmallVector<JeandleBasicBlock*, 8> processed_successors;
   for (JeandleBasicBlock* suc : block->successors()) {
-    if (llvm::is_contained(processed_successors, suc)) {
-      continue;
+    bool first_seen = !llvm::is_contained(processed_successors, suc);
+    if (first_seen) {
+      processed_successors.push_back(suc);
     }
-    processed_successors.push_back(suc);
     if (block->is_pruned_successor(suc)) {
       continue;
     }
     // Don't update handlers' VM state here. They are updated by exception throwers.
-    if (!suc->is_exception_handler() && !suc->merge_VM_state_from(block->VM_state(), block->tail_llvm_block(), _method, is_osr())) {
-      JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(false, "failed to merge VM state into successor block");
+    if (!suc->is_exception_handler()) {
+      if (first_seen) {
+        if (!suc->merge_VM_state_from(block->VM_state(), block->tail_llvm_block(), _method, is_osr())) {
+          JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(false, "failed to merge VM state into successor block");
+        }
+      } else {
+        // Additional edges to the same successor: only add PHI incoming entries.
+        if (suc->VM_state() != nullptr) {
+          suc->VM_state()->update_phi_nodes(block->VM_state(), block->tail_llvm_block(), is_osr());
+        }
+      }
     }
 
-    if (!suc->is_set(JeandleBasicBlock::is_compiled)) {
+    if (first_seen && !suc->is_set(JeandleBasicBlock::is_compiled)) {
       add_to_work_list(suc);
     }
   }
