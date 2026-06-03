@@ -1958,6 +1958,33 @@ void JeandleAbstractInterpreter::invoke() {
     _block->set_tail_llvm_block(checkcast_pass);
   }
 
+  // Devirtualize based on monomorphic receiver profile.
+  bool devirtualized = false;
+  if ((bc == Bytecodes::_invokevirtual || bc == Bytecodes::_invokeinterface) &&
+      !target->can_be_statically_bound() &&
+      receiver_value != nullptr) {
+    int bci = _bytecodes.cur_bci();
+    JeandleProfile::ReceiverProfile rp = _profile.monomorphic_receiver_at(bci);
+    if (rp.valid &&
+        _profile.should_speculate_receiver(bci, Deoptimization::Reason_speculate_class_check)) {
+      ciMethod* resolved = target->resolve_invoke(_method->holder(), rp.receiver_klass);
+      if (resolved != nullptr) {
+        llvm::Value* klass_match = emit_klass_check(receiver_value, rp.receiver_klass);
+        emit_profile_uncommon_trap_guard(klass_match,
+                                         "profile_receiver",
+                                         bci,
+                                         rp.receiver_count,
+                                         1,
+                                         Deoptimization::Reason_speculate_class_check,
+                                         Deoptimization::Action_maybe_recompile,
+                                         _jvm->copy(),
+                                         bci);
+        target = resolved;
+        devirtualized = true;
+      }
+    }
+  }
+
   // Construct arguments.
   const int arg_size = method_signature->count() + receiver;
   llvm::SmallVector<llvm::Value*> args(arg_size);
@@ -1983,6 +2010,10 @@ void JeandleAbstractInterpreter::invoke() {
   // Decide call type and destination.
   JeandleCompiledCall::Type call_type = JeandleCompiledCall::NOT_A_CALL;
   address dest = nullptr;
+  if (devirtualized) {
+    call_type = JeandleCompiledCall::STATIC_CALL;
+    dest = SharedRuntime::get_resolve_opt_virtual_call_stub();
+  } else {
   switch (bc) {
     case Bytecodes::_invokevirtual:  // fall through
     case Bytecodes::_invokeinterface: {
@@ -2017,6 +2048,7 @@ void JeandleAbstractInterpreter::invoke() {
       break;
     }
     default: ShouldNotReachHere();
+  }
   }
 
   assert(call_type != JeandleCompiledCall::NOT_A_CALL, "legal call type");
@@ -2103,6 +2135,22 @@ llvm::BasicBlock* JeandleAbstractInterpreter::emit_profile_uncommon_trap_guard(l
   _ir_builder.SetInsertPoint(hit_block);
   _block->set_tail_llvm_block(hit_block);
   return hit_block;
+}
+
+llvm::Value* JeandleAbstractInterpreter::emit_klass_check(llvm::Value* receiver, ciKlass* expected_klass) {
+  // Load klass from oop: *(receiver + klass_offset_in_bytes)
+  llvm::Value* klass_offset = llvm::ConstantInt::get(_ir_builder.getInt32Ty(), (uint64_t)oopDesc::klass_offset_in_bytes());
+  llvm::Value* klass_addr = _ir_builder.CreateInBoundsGEP(llvm::Type::getInt8Ty(*_context), receiver, klass_offset);
+  llvm::Value* receiver_klass = _ir_builder.CreateLoad(_ir_builder.getPtrTy(), klass_addr);
+
+  // Construct expected klass constant
+  Klass* expected_klass_ptr = (Klass*)(expected_klass->constant_encoding());
+  llvm::PointerType* klass_type = llvm::PointerType::get(*_context, llvm::jeandle::AddrSpace::CHeapAddrSpace);
+  llvm::Value* expected_klass_value = _ir_builder.CreateIntToPtr(
+      _ir_builder.getInt64((intptr_t)expected_klass_ptr), klass_type);
+
+  // Exact klass match (not instanceof), matching C2's predicted_call behavior
+  return _ir_builder.CreateICmpEQ(receiver_klass, expected_klass_value);
 }
 
 bool JeandleAbstractInterpreter::inline_intrinsic(const ciMethod* target) {

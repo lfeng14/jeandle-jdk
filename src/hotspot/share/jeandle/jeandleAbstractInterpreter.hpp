@@ -363,6 +363,7 @@ class JeandleAbstractInterpreter : public StackObj {
                                                      Deoptimization::DeoptAction action,
                                                      JeandleVMState* deopt_state = nullptr,
                                                      int deopt_bci = -1);
+  llvm::Value* emit_klass_check(llvm::Value* receiver, ciKlass* expected_klass);
   bool inline_intrinsic(const ciMethod* target);
   void stack_op(Bytecodes::Code code);
   void shift_op(BasicType type, Bytecodes::Code code);

@@ -55,6 +55,10 @@
  *      -Xcomp -XX:-UseInterpreter -XX:+UseJeandleCompiler -XX:+JeandleDumpIR
  *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::useInterpreterGateTarget
  *      compiler.jeandle.pgo.TestPGOBase useInterpreterGate
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleDumpIR
+ *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::virtualCallTarget
+ *      compiler.jeandle.pgo.TestPGOBase receiverDevirt
  */
 
 package compiler.jeandle.pgo;
@@ -87,6 +91,7 @@ public class TestPGOBase {
             case "staticFallback" -> testStaticPredictionFallback();
             case "resultBranches" -> testDeoptResultBranches();
             case "useInterpreterGate" -> testUseInterpreterGate();
+            case "receiverDevirt" -> testReceiverDevirt();
             default -> throw new IllegalArgumentException("unknown test: " + testName);
         }
     }
@@ -242,6 +247,30 @@ public class TestPGOBase {
         checkStaticFallbackIR("useInterpreterGateTarget");
     }
 
+    private static void testReceiverDevirt() throws Exception {
+        // Warm up with only DerivedA to create monomorphic profile
+        for (int i = 0; i < WARMUP; i++) {
+            Asserts.assertEquals(virtualCallTarget(new DerivedA()), 100);
+        }
+
+        Method method = compile("virtualCallTarget", Base.class);
+        Asserts.assertTrue(WB.isMethodCompiled(method), "virtualCallTarget should compile");
+
+        // Hot path: DerivedA receiver matches the profile
+        Asserts.assertEquals(virtualCallTarget(new DerivedA()), 100,
+                "Should get correct result for profiled receiver");
+
+        // Miss path: DerivedB receiver triggers deopt
+        int trapsBefore = WB.getMethodTrapCount(method, "speculate_class_check");
+        Asserts.assertEquals(virtualCallTarget(new DerivedB()), 200,
+                "Should get correct result after deopt for unprofiled receiver");
+        int trapsAfter = WB.getMethodTrapCount(method, "speculate_class_check");
+        Asserts.assertGTE(trapsAfter, trapsBefore + 1,
+                "unprofiled receiver should trigger speculate_class_check deopt");
+
+        checkReceiverDevirtIR();
+    }
+
     private static void checkBranchIR() throws Exception {
         FileCheck branchCheck = new FileCheck(System.getProperty("user.dir"),
                 TestPGOBase.class.getDeclaredMethod("branchTarget", int.class),
@@ -288,6 +317,19 @@ public class TestPGOBase {
                 "branch without usable profile should use C2-style static branch weights");
         Asserts.assertFalse(contains(lines, "profile_branch_hit") || contains(lines, "profile_branch_miss"),
                 "static fallback should not emit profile uncommon-trap guard blocks");
+    }
+
+    private static void checkReceiverDevirtIR() throws Exception {
+        FileCheck check = new FileCheck(System.getProperty("user.dir"),
+                TestPGOBase.class.getDeclaredMethod("virtualCallTarget", Base.class),
+                false);
+        // Devirtualization emits a klass guard branch
+        check.checkPattern("br i1 .*label %bci_[0-9]+_profile_receiver_hit, label %bci_[0-9]+_profile_receiver_miss");
+        check.check("profile_receiver_hit");
+        check.check("profile_receiver_miss");
+        // Miss path deopts via llvm.experimental.deoptimize, not uncommon_trap
+        check.checkPattern("call .*@llvm\\.experimental\\.deoptimize");
+        check.checkNotPattern("call .*@uncommon_trap");
     }
 
     private static boolean contains(List<String> lines, String content) {
@@ -438,5 +480,23 @@ public class TestPGOBase {
         } catch (ArithmeticException e) {
             return local + fallback;
         }
+    }
+
+    // --- Receiver profile devirtualization test ---
+
+    static class Base {
+        public int foo() { return 42; }
+    }
+
+    static class DerivedA extends Base {
+        public int foo() { return 100; }
+    }
+
+    static class DerivedB extends Base {
+        public int foo() { return 200; }
+    }
+
+    public static int virtualCallTarget(Base obj) {
+        return obj.foo();
     }
 }

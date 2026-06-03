@@ -111,6 +111,12 @@ bool JeandleProfile::should_speculate_branch(int bci,
          !has_too_many_traps(reason) &&
          !has_too_many_recompiles(bci, reason);
 }
+bool JeandleProfile::should_speculate_receiver(int bci, Deoptimization::DeoptReason reason) const {
+  return is_mature() &&
+         !has_trap_at(bci, reason) &&
+         !has_too_many_traps(reason) &&
+         !has_too_many_recompiles(bci, reason);
+}
 
 int JeandleProfile::invocation_count() const {
   return has_profile() ? _mdo->invocation_count() : 0;

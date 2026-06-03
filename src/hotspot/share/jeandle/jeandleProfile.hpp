@@ -46,6 +46,7 @@ class JeandleProfile : public StackObj {
   bool has_too_many_recompiles(int bci, Deoptimization::DeoptReason reason) const;
   bool should_use_branch_profile(int taken, int not_taken) const;
   bool should_speculate_branch(int bci, Deoptimization::DeoptReason reason, int taken, int not_taken) const;
+  bool should_speculate_receiver(int bci, Deoptimization::DeoptReason reason) const;
 
   struct BranchCounts {
     int taken;
