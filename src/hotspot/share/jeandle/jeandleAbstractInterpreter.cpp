@@ -1973,10 +1973,17 @@ void JeandleAbstractInterpreter::invoke() {
 
   // Devirtualize based on monomorphic receiver profile.
   bool devirtualized = false;
+  bool bimorphic_devirt = false;
+  JeandleProfile::BimorphicReceiverProfile bp;
+  ciMethod* bimorphic_resolved0 = nullptr;
+  ciMethod* bimorphic_resolved1 = nullptr;
+
   if ((bc == Bytecodes::_invokevirtual || bc == Bytecodes::_invokeinterface) &&
       !target->can_be_statically_bound() &&
       receiver_value != nullptr) {
     int bci = _bytecodes.cur_bci();
+
+    // Try monomorphic first
     JeandleProfile::ReceiverProfile rp = _profile.monomorphic_receiver_at(bci);
     if (rp.valid &&
         _profile.should_speculate_receiver(bci, Deoptimization::Reason_speculate_class_check)) {
@@ -1996,6 +2003,91 @@ void JeandleAbstractInterpreter::invoke() {
         devirtualized = true;
       }
     }
+
+    // If not monomorphic, try bimorphic
+    if (!devirtualized) {
+      bp = _profile.bimorphic_receiver_at(bci);
+      if (bp.valid &&
+          _profile.should_speculate_receiver(bci, Deoptimization::Reason_speculate_class_check)) {
+        bimorphic_resolved0 = target->resolve_invoke(_method->holder(), bp.receiver0);
+        bimorphic_resolved1 = target->resolve_invoke(_method->holder(), bp.receiver1);
+        if (bimorphic_resolved0 != nullptr && bimorphic_resolved1 != nullptr) {
+          bimorphic_devirt = true;
+        }
+      }
+    }
+  }
+
+  // Bimorphic devirtualization: two cascaded klass guards, each with its own
+  // static call.  If neither guard matches, deoptimize.
+  if (bimorphic_devirt) {
+    JeandleVMState* deopt_state = _jvm->copy();
+    int bci = _bytecodes.cur_bci();
+    BasicType return_type = method_signature->return_type()->basic_type();
+
+    // Pop arguments.
+    const int arg_size = method_signature->count() + receiver;
+    llvm::SmallVector<llvm::Value*> args(arg_size);
+    llvm::SmallVector<llvm::Type*> args_type(arg_size);
+    for (int i = method_signature->count() - 1; i >= 0; --i) {
+      BasicType type = method_signature->type_at(i)->basic_type();
+      args[i + receiver] = _jvm->pop(type);
+      args_type[i + receiver] = JeandleType::java2llvm(type, *_context);
+    }
+    if (receiver) {
+      args[0] = _jvm->pop(BasicType::T_OBJECT);
+      args_type[0] = JeandleType::java2llvm(BasicType::T_OBJECT, *_context);
+    }
+
+    // --- First guard: receiver0 ---
+    llvm::Value* klass_match0 = emit_klass_check(receiver_value, bp.receiver0);
+    llvm::BasicBlock* miss_block0 = nullptr;
+    emit_profile_guard(klass_match0, "profile_receiver_0", bci,
+                       bp.count0, bp.count1 + 1, &miss_block0);
+
+    llvm::BasicBlock* normal_dest0 = nullptr;
+    llvm::InvokeInst* invoke0 = emit_static_invoke(bimorphic_resolved0, args, args_type,
+                                                    method_signature, bci,
+                                                    is_method_handle_invoke, &normal_dest0);
+    RETURN_VOID_ON_JEANDLE_ERROR();
+
+    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(*_context,
+        "bci_" + std::to_string(bci) + "_bimorphic_merge", _llvm_func);
+    _ir_builder.CreateBr(merge_block);
+
+    // --- Second guard: receiver1 (in miss_block0) ---
+    _ir_builder.SetInsertPoint(miss_block0);
+    llvm::Value* klass_match1 = emit_klass_check(receiver_value, bp.receiver1);
+
+    llvm::BasicBlock* miss_block1 = nullptr;
+    emit_profile_guard(klass_match1, "profile_receiver_1", bci,
+                       bp.count1, 1, &miss_block1);
+
+    uncommon_trap(Deoptimization::Reason_speculate_class_check,
+                  Deoptimization::Action_maybe_recompile,
+                  miss_block1, deopt_state, bci);
+
+    llvm::BasicBlock* normal_dest1 = nullptr;
+    llvm::InvokeInst* invoke1 = emit_static_invoke(bimorphic_resolved1, args, args_type,
+                                                    method_signature, bci,
+                                                    is_method_handle_invoke, &normal_dest1);
+    RETURN_VOID_ON_JEANDLE_ERROR();
+
+    _ir_builder.CreateBr(merge_block);
+
+    // Merge: PHI for return value.
+    _ir_builder.SetInsertPoint(merge_block);
+    _block->set_tail_llvm_block(merge_block);
+
+    if (return_type != BasicType::T_VOID) {
+      llvm::PHINode* phi = _ir_builder.CreatePHI(
+          JeandleType::java2llvm(return_type, *_context), 2);
+      phi->addIncoming(invoke0, normal_dest0);
+      phi->addIncoming(invoke1, normal_dest1);
+      _jvm->push(return_type, phi);
+    }
+
+    return;
   }
 
   // Construct arguments.
@@ -2134,6 +2226,19 @@ llvm::BasicBlock* JeandleAbstractInterpreter::emit_profile_uncommon_trap_guard(l
                                                                                Deoptimization::DeoptAction action,
                                                                                JeandleVMState* deopt_state,
                                                                                int deopt_bci) {
+  llvm::BasicBlock* miss_block = nullptr;
+  llvm::BasicBlock* hit_block = emit_profile_guard(hot_condition, name, bci,
+                                                    hot_count, cold_count, &miss_block);
+  uncommon_trap(reason, action, miss_block, deopt_state, deopt_bci);
+  return hit_block;
+}
+
+llvm::BasicBlock* JeandleAbstractInterpreter::emit_profile_guard(llvm::Value* hot_condition,
+                                                                  const char* name,
+                                                                  int bci,
+                                                                  uint hot_count,
+                                                                  uint cold_count,
+                                                                  llvm::BasicBlock** miss_block_out) {
   llvm::BasicBlock* hit_block = llvm::BasicBlock::Create(*_context,
                                                          "bci_" + std::to_string(bci) + "_" + name + "_hit",
                                                          _llvm_func);
@@ -2143,10 +2248,9 @@ llvm::BasicBlock* JeandleAbstractInterpreter::emit_profile_uncommon_trap_guard(l
   llvm::BranchInst* guard = _ir_builder.CreateCondBr(hot_condition, hit_block, miss_block);
   attach_profile_branch_weights(guard, hot_count, cold_count);
 
-  uncommon_trap(reason, action, miss_block, deopt_state, deopt_bci);
-
   _ir_builder.SetInsertPoint(hit_block);
   _block->set_tail_llvm_block(hit_block);
+  *miss_block_out = miss_block;
   return hit_block;
 }
 
@@ -2164,6 +2268,71 @@ llvm::Value* JeandleAbstractInterpreter::emit_klass_check(llvm::Value* receiver,
 
   // Exact klass match (not instanceof), matching C2's predicted_call behavior
   return _ir_builder.CreateICmpEQ(receiver_klass, expected_klass_value);
+}
+
+llvm::InvokeInst* JeandleAbstractInterpreter::emit_static_invoke(
+    ciMethod* callee_method,
+    llvm::ArrayRef<llvm::Value*> args,
+    llvm::ArrayRef<llvm::Type*> args_type,
+    ciSignature* sig,
+    int bci,
+    bool is_mh_invoke,
+    llvm::BasicBlock** normal_dest) {
+
+  BasicType return_type = sig->return_type()->basic_type();
+
+  // Declare callee function type.
+  llvm::FunctionType* func_type = llvm::FunctionType::get(
+      JeandleType::java2llvm(return_type, *_context), args_type, false);
+  llvm::FunctionCallee callee = _module.getOrInsertFunction(
+      JeandleFuncSig::method_name_with_signature(callee_method), func_type);
+  llvm::Function* func = llvm::cast<llvm::Function>(callee.getCallee());
+  func->setCallingConv(llvm::CallingConv::Hotspot_JIT);
+  func->setGC(llvm::jeandle::JeandleGC);
+
+  // Record call site.
+  JeandleCompiledCall::Type call_type = JeandleCompiledCall::STATIC_CALL;
+  address dest = SharedRuntime::get_resolve_opt_virtual_call_stub();
+  uint32_t id = _compiled_code.next_statepoint_id();
+  _compiled_code.push_non_routine_call_site(
+      new CallSiteInfo(call_type, dest, bci, is_mh_invoke, id));
+
+  // Exception dispatch.
+  DispatchedDest dispatched = dispatch_exception_for_invoke();
+  // Caller checks RETURN_VOID_ON_JEANDLE_ERROR after this call.
+
+  // Create the invoke instruction.
+  llvm::InvokeInst* invoke = _ir_builder.CreateInvoke(
+      callee, dispatched._normal_dest, dispatched._unwind_dest, args,
+      {create_current_deopt_bundle()});
+
+  // Apply attributes.
+  invoke->setCallingConv(llvm::CallingConv::Hotspot_JIT);
+  invoke->addFnAttr(llvm::Attribute::get(*_context,
+      llvm::jeandle::Attribute::StatepointID, std::to_string(id)));
+  invoke->addFnAttr(llvm::Attribute::get(*_context,
+      llvm::jeandle::Attribute::StatepointNumPatchBytes,
+      std::to_string(JeandleCompiledCall::call_site_patch_size(call_type))));
+
+  // Attach java-klass return type attribute.
+  ciType* ret_type = sig->return_type();
+  if (ret_type->is_klass()) {
+    ciKlass* ret_klass = ret_type->as_klass();
+    if (ret_klass->is_loaded() && !is_unverified_interface(ret_klass)) {
+      Klass* ret_klass_enc = (Klass*)(ret_klass->constant_encoding());
+      invoke->addRetAttr(llvm::Attribute::get(*_context,
+          llvm::jeandle::Attribute::JavaKlass,
+          std::to_string((uintptr_t)ret_klass_enc)));
+      if (is_effectively_final(ret_klass)) {
+        invoke->addRetAttr(llvm::Attribute::get(*_context,
+            llvm::jeandle::Attribute::JavaKlassExact));
+      }
+    }
+  }
+
+  _ir_builder.SetInsertPoint(dispatched._normal_dest);
+  *normal_dest = dispatched._normal_dest;
+  return invoke;
 }
 
 bool JeandleAbstractInterpreter::inline_intrinsic(const ciMethod* target) {

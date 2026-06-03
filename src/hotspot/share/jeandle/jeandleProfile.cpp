@@ -188,3 +188,37 @@ JeandleProfile::ReceiverProfile JeandleProfile::monomorphic_receiver_at(int bci)
   result.valid = true;
   return result;
 }
+
+JeandleProfile::BimorphicReceiverProfile JeandleProfile::bimorphic_receiver_at(int bci) const {
+  BimorphicReceiverProfile result = {nullptr, nullptr, 0, 0, 0, false};
+  if (_method == nullptr || !is_mature()) {
+    return result;
+  }
+
+  ciCallProfile profile = _method->call_profile_at_bci(bci);
+  if (profile.morphism() != 2 || !profile.has_receiver(0) || !profile.has_receiver(1)) {
+    return result;
+  }
+
+  ciKlass* recv0 = profile.receiver(0);
+  ciKlass* recv1 = profile.receiver(1);
+  if (recv0 == nullptr || !recv0->is_loaded() ||
+      recv1 == nullptr || !recv1->is_loaded()) {
+    return result;
+  }
+
+  uint count0 = (uint) profile.receiver_count(0);
+  uint count1 = (uint) profile.receiver_count(1);
+  if (count0 <= 0 || count1 <= 0) {
+    return result;
+  }
+
+  uint site_count = profile.count() > 0 ? (uint) profile.count() : (count0 + count1);
+  result.receiver0 = recv0;
+  result.receiver1 = recv1;
+  result.count0 = count0;
+  result.count1 = count1;
+  result.site_count = site_count;
+  result.valid = true;
+  return result;
+}

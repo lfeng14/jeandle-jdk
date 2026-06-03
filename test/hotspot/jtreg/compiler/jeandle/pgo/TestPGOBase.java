@@ -59,6 +59,10 @@
  *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleDumpIR
  *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::virtualCallTarget
  *      compiler.jeandle.pgo.TestPGOBase receiverDevirt
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleDumpIR
+ *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::bimorphicCallTarget
+ *      compiler.jeandle.pgo.TestPGOBase bimorphicDevirt
  */
 
 package compiler.jeandle.pgo;
@@ -92,6 +96,7 @@ public class TestPGOBase {
             case "resultBranches" -> testDeoptResultBranches();
             case "useInterpreterGate" -> testUseInterpreterGate();
             case "receiverDevirt" -> testReceiverDevirt();
+            case "bimorphicDevirt" -> testBimorphicDevirt();
             default -> throw new IllegalArgumentException("unknown test: " + testName);
         }
     }
@@ -332,6 +337,52 @@ public class TestPGOBase {
         check.checkNotPattern("call .*@uncommon_trap");
     }
 
+    private static void testBimorphicDevirt() throws Exception {
+        // Warm up with both DerivedA and DerivedB to create bimorphic profile
+        for (int i = 0; i < WARMUP; i++) {
+            Asserts.assertEquals(bimorphicCallTarget(new DerivedA()), 100);
+            Asserts.assertEquals(bimorphicCallTarget(new DerivedB()), 200);
+        }
+
+        Method method = compile("bimorphicCallTarget", Base.class);
+        Asserts.assertTrue(WB.isMethodCompiled(method), "bimorphicCallTarget should compile");
+
+        // Hot path: both receivers should be handled by fast paths (no deopt)
+        int trapsBefore = WB.getMethodTrapCount(method, "speculate_class_check");
+        Asserts.assertEquals(bimorphicCallTarget(new DerivedA()), 100,
+                "Should get correct result for first profiled receiver");
+        Asserts.assertEquals(bimorphicCallTarget(new DerivedB()), 200,
+                "Should get correct result for second profiled receiver");
+        int trapsAfter = WB.getMethodTrapCount(method, "speculate_class_check");
+        Asserts.assertEquals(trapsAfter, trapsBefore,
+                "profiled receivers should not trigger deopt");
+
+        // Miss path: unprofiled receiver triggers deopt
+        Asserts.assertEquals(bimorphicCallTarget(new Base()), 42,
+                "Should get correct result after deopt for unprofiled receiver");
+        int trapsAfterMiss = WB.getMethodTrapCount(method, "speculate_class_check");
+        Asserts.assertGTE(trapsAfterMiss, trapsBefore + 1,
+                "unprofiled receiver should trigger speculate_class_check deopt");
+
+        checkBimorphicDevirtIR();
+    }
+
+    private static void checkBimorphicDevirtIR() throws Exception {
+        FileCheck check = new FileCheck(System.getProperty("user.dir"),
+                TestPGOBase.class.getDeclaredMethod("bimorphicCallTarget", Base.class),
+                false);
+        // Two cascaded klass guards
+        check.check("profile_receiver_0_hit");
+        check.check("profile_receiver_0_miss");
+        check.check("profile_receiver_1_hit");
+        check.check("profile_receiver_1_miss");
+        // Miss path deopts via llvm.experimental.deoptimize (appears before merge in IR)
+        check.checkPattern("call .*@llvm\\.experimental\\.deoptimize");
+        // Merge block
+        check.check("bimorphic_merge");
+        check.checkNotPattern("call .*@uncommon_trap");
+    }
+
     private static boolean contains(List<String> lines, String content) {
         for (String line : lines) {
             if (line.contains(content)) {
@@ -497,6 +548,11 @@ public class TestPGOBase {
     }
 
     public static int virtualCallTarget(Base obj) {
+        return obj.foo();
+    }
+
+    // Separate method so it gets its own MDO/bci distinct from virtualCallTarget.
+    public static int bimorphicCallTarget(Base obj) {
         return obj.foo();
     }
 }

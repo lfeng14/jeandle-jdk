@@ -69,11 +69,21 @@ class JeandleProfile : public StackObj {
     bool valid;
   };
 
+  struct BimorphicReceiverProfile {
+    ciKlass* receiver0;
+    ciKlass* receiver1;
+    uint count0;
+    uint count1;
+    uint site_count;
+    bool valid;
+  };
+
   int invocation_count() const;
   BranchCounts branch_at(int bci) const;
   SwitchCounts switch_at(int bci) const;
   uint switch_case_count_at(int bci, int index) const;
   ReceiverProfile monomorphic_receiver_at(int bci) const;
+  BimorphicReceiverProfile bimorphic_receiver_at(int bci) const;
 };
 
 #endif // SHARE_JEANDLE_PROFILE_HPP

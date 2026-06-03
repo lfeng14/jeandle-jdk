@@ -363,7 +363,27 @@ class JeandleAbstractInterpreter : public StackObj {
                                                      Deoptimization::DeoptAction action,
                                                      JeandleVMState* deopt_state = nullptr,
                                                      int deopt_bci = -1);
+  // Like emit_profile_uncommon_trap_guard but the miss path falls through to
+  // a separate block instead of emitting an uncommon trap.  The caller is
+  // responsible for filling the miss block.  Returns the hit block; sets
+  // *miss_block_out to the miss block.
+  llvm::BasicBlock* emit_profile_guard(llvm::Value* hot_condition,
+                                       const char* name,
+                                       int bci,
+                                       uint hot_count,
+                                       uint cold_count,
+                                       llvm::BasicBlock** miss_block_out);
   llvm::Value* emit_klass_check(llvm::Value* receiver, ciKlass* expected_klass);
+
+  // Emit a static invoke (used by devirtualized calls).  Returns the invoke
+  // instruction and sets *normal_dest to the normal-destination block.
+  llvm::InvokeInst* emit_static_invoke(ciMethod* callee_method,
+                                       llvm::ArrayRef<llvm::Value*> args,
+                                       llvm::ArrayRef<llvm::Type*> args_type,
+                                       ciSignature* method_signature,
+                                       int bci,
+                                       bool is_method_handle_invoke,
+                                       llvm::BasicBlock** normal_dest);
   bool inline_intrinsic(const ciMethod* target);
   void stack_op(Bytecodes::Code code);
   void shift_op(BasicType type, Bytecodes::Code code);
