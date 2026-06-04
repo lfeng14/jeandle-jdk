@@ -375,15 +375,19 @@ class JeandleAbstractInterpreter : public StackObj {
                                        llvm::BasicBlock** miss_block_out);
   llvm::Value* emit_klass_check(llvm::Value* receiver, ciKlass* expected_klass);
 
-  // Emit a static invoke (used by devirtualized calls).  Returns the invoke
-  // instruction and sets *normal_dest to the normal-destination block.
-  llvm::InvokeInst* emit_static_invoke(ciMethod* callee_method,
-                                       llvm::ArrayRef<llvm::Value*> args,
-                                       llvm::ArrayRef<llvm::Type*> args_type,
-                                       ciSignature* method_signature,
-                                       int bci,
-                                       bool is_method_handle_invoke,
-                                       llvm::BasicBlock** normal_dest);
+  // Emit an invoke instruction.  Declares the callee, records the call site,
+  // emits the LLVM invoke with the current deopt bundle, attaches attributes
+  // and the JavaKlass return type attribute, then sets the IR builder /
+  // JeandleBasicBlock tail to the normal-destination block.
+  llvm::InvokeInst* emit_invoke(ciMethod* callee_method,
+                                JeandleCompiledCall::Type call_type,
+                                address dest,
+                                llvm::ArrayRef<llvm::Value*> args,
+                                llvm::ArrayRef<llvm::Type*> args_type,
+                                ciSignature* method_signature,
+                                int bci,
+                                bool is_method_handle_invoke,
+                                llvm::BasicBlock** normal_dest = nullptr);
   bool inline_intrinsic(const ciMethod* target);
   void stack_op(Bytecodes::Code code);
   void shift_op(BasicType type, Bytecodes::Code code);
