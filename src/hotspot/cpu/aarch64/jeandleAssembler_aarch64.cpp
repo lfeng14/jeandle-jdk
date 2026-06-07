@@ -35,6 +35,14 @@
 const int JeandleAssembler::_call_stub_size    = 13 * NativeInstruction::instruction_size;
 const int JeandleAssembler::_routine_stub_size = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size;
 
+int JeandleAssembler::static_call_stub_size() {
+  return _call_stub_size;
+}
+
+int JeandleAssembler::routine_call_stub_size() {
+  return _routine_stub_size;
+}
+
 int JeandleAssembler::exception_handler_size() {
   return MacroAssembler::far_codestub_branch_size();
 }

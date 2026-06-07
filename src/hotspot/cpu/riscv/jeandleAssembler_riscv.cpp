@@ -36,6 +36,14 @@ const int JeandleAssembler::_call_stub_size    = 14 * NativeInstruction::instruc
                                                   (NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size);
 const int JeandleAssembler::_routine_stub_size = NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size;
 
+int JeandleAssembler::static_call_stub_size() {
+  return _call_stub_size;
+}
+
+int JeandleAssembler::routine_call_stub_size() {
+  return _routine_stub_size;
+}
+
 int JeandleAssembler::exception_handler_size() {
   return MacroAssembler::far_branch_size();
 }
@@ -49,8 +57,7 @@ void JeandleAssembler::emit_static_call_stub(int inst_offset, CallSiteInfo* call
   address call_address = __ addr_at(inst_offset);
 
   // same as C1 call_stub_size()
-  int stub_size = 14 * NativeInstruction::instruction_size +
-                  (NativeInstruction::instruction_size + NativeCallTrampolineStub::instruction_size);
+  int stub_size = static_call_stub_size();
   address stub = __ start_a_stub(stub_size);
   JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(stub != nullptr, "static call stub overflow");
 

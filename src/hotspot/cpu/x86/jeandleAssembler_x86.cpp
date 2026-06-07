@@ -36,6 +36,14 @@ const int JeandleAssembler::_call_stub_size    = 28;
 // No need to emit routine stub on x86.
 const int JeandleAssembler::_routine_stub_size = 0;
 
+int JeandleAssembler::static_call_stub_size() {
+  return _call_stub_size;
+}
+
+int JeandleAssembler::routine_call_stub_size() {
+  return _routine_stub_size;
+}
+
 int JeandleAssembler::exception_handler_size() {
   return NativeJump::instruction_size;
 }
