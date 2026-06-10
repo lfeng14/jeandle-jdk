@@ -174,7 +174,7 @@ public class TestUnstableIfTypedCatch {
         // plain noreturn runtime call. The intrinsic is the opaque barrier.
         FileCheck fc = new FileCheck(dir, m, /*optimized=*/false);
         fc.checkPattern("define hotspotcc i32 .*hotNeverTakenWithCatch");
-        fc.checkPattern("br i1 .*unstable_if");
+        fc.checkPattern("br i1 .*profile_branch");
         fc.checkPattern("@llvm.experimental.deoptimize");
 
         // Post-optimization the intrinsic must still be present -- if any

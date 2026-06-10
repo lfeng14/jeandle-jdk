@@ -36,8 +36,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Profile-Guided Optimization benchmark for the Jeandle JIT.
  *
- * A/B is driven by the {@code -XX:JeandleUseProfile} flag (default on). Run the
- * benchmark JAR twice and diff:
+ * A/B is driven by the {@code -XX:JeandleUseProfile} flag (VM default off; this
+ * benchmark fork enables it by default). Run the benchmark JAR twice and diff:
  *   ...benchmarks.jar JeandlePGO -jvmArgsAppend "-XX:+UseJeandleCompiler -XX:+JeandleUseProfile"
  *   ...benchmarks.jar JeandlePGO -jvmArgsAppend "-XX:+UseJeandleCompiler -XX:-JeandleUseProfile"
  *
@@ -64,7 +64,7 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @Warmup(iterations = 5, time = 1)
 @Measurement(iterations = 8, time = 1)
-@Fork(value = 3, jvmArgs = {"-XX:+UseJeandleCompiler"})
+@Fork(value = 3, jvmArgs = {"-XX:+UseJeandleCompiler", "-XX:+JeandleUseProfile"})
 public class JeandlePGO {
 
     static final int SIZE = 8192;
