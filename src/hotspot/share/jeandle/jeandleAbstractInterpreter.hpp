@@ -391,6 +391,32 @@ class JeandleAbstractInterpreter : public StackObj {
   void table_switch();
   void invoke();
   bool try_lower_intrinsic(const ciMethod* target);
+  void attach_profile_branch_weights(llvm::BranchInst* br, uint hot_count, uint cold_count);
+  llvm::BasicBlock* emit_profile_uncommon_trap_guard(llvm::Value* hot_condition,
+                                                     const char* name,
+                                                     int bci,
+                                                     uint hot_count,
+                                                     uint cold_count,
+                                                     Deoptimization::DeoptReason reason,
+                                                     Deoptimization::DeoptAction action,
+                                                     JeandleVMState* deopt_state = nullptr,
+                                                     int deopt_bci = -1);
+  llvm::BasicBlock* emit_profile_guard(llvm::Value* hot_condition,
+                                       const char* name,
+                                       int bci,
+                                       uint hot_count,
+                                       uint cold_count,
+                                       llvm::BasicBlock** miss_block_out);
+  llvm::Value* emit_klass_check(llvm::Value* receiver, ciKlass* expected_klass);
+  llvm::InvokeInst* emit_invoke(ciMethod* callee_method,
+                                JeandleCompiledCall::Type call_type,
+                                address dest,
+                                llvm::ArrayRef<llvm::Value*> args,
+                                llvm::ArrayRef<llvm::Type*> args_type,
+                                ciSignature* method_signature,
+                                int bci,
+                                bool is_method_handle_invoke,
+                                llvm::BasicBlock** normal_dest = nullptr);
   void stack_op(Bytecodes::Code code);
   void shift_op(BasicType type, Bytecodes::Code code);
   void checkcast();

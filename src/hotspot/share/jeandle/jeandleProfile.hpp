@@ -46,6 +46,7 @@ class JeandleProfile : public StackObj {
   bool has_too_many_recompiles(int bci, Deoptimization::DeoptReason reason) const;
   bool should_use_branch_profile(int taken, int not_taken) const;
   bool should_speculate_branch(int bci, Deoptimization::DeoptReason reason, int taken, int not_taken) const;
+  bool should_speculate_receiver(int bci, Deoptimization::DeoptReason reason) const;
 
   struct BranchCounts {
     int taken;
@@ -68,11 +69,22 @@ class JeandleProfile : public StackObj {
     bool valid;
   };
 
+  struct BimorphicReceiverProfile {
+    ciKlass* receiver0;
+    ciKlass* receiver1;
+    uint count0;
+    uint count1;
+    uint site_count;
+    bool valid;
+  };
+
   int invocation_count() const;
   BranchCounts branch_at(int bci) const;
   SwitchCounts switch_at(int bci) const;
   uint switch_case_count_at(int bci, int index) const;
   ReceiverProfile monomorphic_receiver_at(int bci) const;
+  BimorphicReceiverProfile bimorphic_receiver_at(int bci) const;
+  ReceiverProfile major_receiver_at(int bci) const;
 };
 
 #endif // SHARE_JEANDLE_PROFILE_HPP
