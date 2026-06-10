@@ -33,8 +33,10 @@ import java.util.concurrent.TimeUnit;
  * Measures receiver-profile based devirtualization for interface calls.
  *
  * The call profile is controlled by the receiver array:
- *   monomorphic: one receiver class
+ *   monomorphicA/B/C/D: one receiver class, split to avoid depending on
+ *                       whichever receiver is cheapest in the lookup path
  *   bimorphic:   two receiver classes
+ *   major:       one dominant receiver plus several cold receivers
  *   megamorphic: four receiver classes, used as the no-devirtualization baseline
  *
  * The dispatch benchmarks use a tiny callee to make virtual dispatch cost visible.
@@ -99,8 +101,12 @@ public class JeandleReceiverPGO {
         }
     }
 
-    private final Receiver[] monomorphic = new Receiver[INVOCATIONS];
+    private final Receiver[] monomorphicA = new Receiver[INVOCATIONS];
+    private final Receiver[] monomorphicB = new Receiver[INVOCATIONS];
+    private final Receiver[] monomorphicC = new Receiver[INVOCATIONS];
+    private final Receiver[] monomorphicD = new Receiver[INVOCATIONS];
     private final Receiver[] bimorphic = new Receiver[INVOCATIONS];
+    private final Receiver[] majorReceiver = new Receiver[INVOCATIONS];
     private final Receiver[] megamorphic = new Receiver[INVOCATIONS];
     private final int[] values = new int[INVOCATIONS];
 
@@ -113,8 +119,26 @@ public class JeandleReceiverPGO {
 
         for (int i = 0; i < INVOCATIONS; i++) {
             values[i] = i * 17 + 31;
-            monomorphic[i] = a;
-            bimorphic[i] = (i & 1) == 0 ? a : b;
+            monomorphicA[i] = a;
+            monomorphicB[i] = b;
+            monomorphicC[i] = c;
+            monomorphicD[i] = d;
+            bimorphic[i] = (i & 1) == 0 ? c : d;
+
+            // 60/64 calls use C, while the remaining calls are spread across
+            // A/B/D. This should avoid mono/bimorphic classification but still
+            // satisfy TypeProfileMajorReceiverPercent's default 90% threshold.
+            int majorCase = i & 63;
+            if (majorCase < 60) {
+                majorReceiver[i] = c;
+            } else if (majorCase == 60) {
+                majorReceiver[i] = a;
+            } else if (majorCase == 61) {
+                majorReceiver[i] = b;
+            } else {
+                majorReceiver[i] = d;
+            }
+
             switch (i & 3) {
                 case 0 -> megamorphic[i] = a;
                 case 1 -> megamorphic[i] = b;
@@ -131,6 +155,11 @@ public class JeandleReceiverPGO {
 
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     private static int callDispatchBimorphic(Receiver receiver, int x) {
+        return receiver.dispatch(x);
+    }
+
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    private static int callDispatchMajorReceiver(Receiver receiver, int x) {
         return receiver.dispatch(x);
     }
 
@@ -163,9 +192,42 @@ public class JeandleReceiverPGO {
     }
 
     @Benchmark
-    public int dispatchMonomorphic() {
+    public int dispatchMonomorphicA() {
         int sum = 0;
-        Receiver[] receivers = monomorphic;
+        Receiver[] receivers = monomorphicA;
+        int[] input = values;
+        for (int i = 0; i < receivers.length; i++) {
+            sum += callDispatchMonomorphic(receivers[i], input[i]);
+        }
+        return sum;
+    }
+
+    @Benchmark
+    public int dispatchMonomorphicB() {
+        int sum = 0;
+        Receiver[] receivers = monomorphicB;
+        int[] input = values;
+        for (int i = 0; i < receivers.length; i++) {
+            sum += callDispatchMonomorphic(receivers[i], input[i]);
+        }
+        return sum;
+    }
+
+    @Benchmark
+    public int dispatchMonomorphicC() {
+        int sum = 0;
+        Receiver[] receivers = monomorphicC;
+        int[] input = values;
+        for (int i = 0; i < receivers.length; i++) {
+            sum += callDispatchMonomorphic(receivers[i], input[i]);
+        }
+        return sum;
+    }
+
+    @Benchmark
+    public int dispatchMonomorphicD() {
+        int sum = 0;
+        Receiver[] receivers = monomorphicD;
         int[] input = values;
         for (int i = 0; i < receivers.length; i++) {
             sum += callDispatchMonomorphic(receivers[i], input[i]);
@@ -185,6 +247,17 @@ public class JeandleReceiverPGO {
     }
 
     @Benchmark
+    public int dispatchMajorReceiver() {
+        int sum = 0;
+        Receiver[] receivers = majorReceiver;
+        int[] input = values;
+        for (int i = 0; i < receivers.length; i++) {
+            sum += callDispatchMajorReceiver(receivers[i], input[i]);
+        }
+        return sum;
+    }
+
+    @Benchmark
     public int dispatchMegamorphic() {
         int sum = 0;
         Receiver[] receivers = megamorphic;
@@ -194,37 +267,4 @@ public class JeandleReceiverPGO {
         }
         return sum;
     }
-
-    // @Benchmark
-    // public int inlineAmplifiedMonomorphic() {
-    //     int sum = 0;
-    //     Receiver[] receivers = monomorphic;
-    //     int[] input = values;
-    //     for (int i = 0; i < receivers.length; i++) {
-    //         sum += callInlineAmplifiedMonomorphic(receivers[i], input[i]);
-    //     }
-    //     return sum;
-    // }
-
-    // @Benchmark
-    // public int inlineAmplifiedBimorphic() {
-    //     int sum = 0;
-    //     Receiver[] receivers = bimorphic;
-    //     int[] input = values;
-    //     for (int i = 0; i < receivers.length; i++) {
-    //         sum += callInlineAmplifiedBimorphic(receivers[i], input[i]);
-    //     }
-    //     return sum;
-    // }
-
-    // @Benchmark
-    // public int inlineAmplifiedMegamorphic() {
-    //     int sum = 0;
-    //     Receiver[] receivers = megamorphic;
-    //     int[] input = values;
-    //     for (int i = 0; i < receivers.length; i++) {
-    //         sum += callInlineAmplifiedMegamorphic(receivers[i], input[i]);
-    //     }
-    //     return sum;
-    // }
 }
