@@ -155,7 +155,7 @@ public class TestUnstableIf {
 
         FileCheck fc = new FileCheck(dir, m, /*optimized=*/false);
         fc.checkPattern("define hotspotcc i32 .*hotNeverTaken");
-        fc.checkPattern("br i1 .*unstable_if");
+        fc.checkPattern("br i1 .*profile_branch");
         fc.checkPattern("@llvm.experimental.deoptimize");
 
         // The compiled method prunes the x<0 path, so x<0 takes the trap, deopts,

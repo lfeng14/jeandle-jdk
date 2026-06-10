@@ -22,40 +22,57 @@
 #define SHARE_JEANDLE_PROFILE_HPP
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
+#include "ci/ciCallProfile.hpp"
 #include "ci/ciMethod.hpp"
 #include "ci/ciMethodData.hpp"
 #include "memory/allocation.hpp"
-#include "utilities/growableArray.hpp"
+#include "runtime/deoptimization.hpp"
 
-// Read-only view of a method's MDO for the Jeandle JIT. Callers must treat
-// has_profile()==false as "emit the conservative shape", never as an error --
-// methods compiled under -Xcomp or never run interpreted will hit it.
+// Read-only wrapper around the method profile data used by Jeandle.
 class JeandleProfile : public StackObj {
-  ciMethod*     _method;
+  // Match C2 branch profile gating in Parse::dynamic_branch_prediction.
+  static const uint MinBranchProfileCount = 40;
+
+  ciMethod* _method;
   ciMethodData* _mdo;
 
  public:
   explicit JeandleProfile(ciMethod* method);
 
   bool has_profile() const;
-
-  // True when the MDO has enough samples to trust for speculation. Speculative
-  // transforms (unstable-if prune, guarded devirt) must gate on this.
   bool is_mature() const;
-
-  uint entry_count() const;
+  bool has_trap_at(int bci, Deoptimization::DeoptReason reason) const;
+  bool has_too_many_traps(Deoptimization::DeoptReason reason) const;
+  bool has_too_many_recompiles(int bci, Deoptimization::DeoptReason reason) const;
+  bool should_use_branch_profile(int taken, int not_taken) const;
+  bool should_speculate_branch(int bci, Deoptimization::DeoptReason reason, int taken, int not_taken) const;
 
   struct BranchCounts {
-    uint taken;
-    uint not_taken;
+    int taken;
+    int not_taken;
+    bool valid;
+
+    int64_t total() const { return (int64_t) taken + (int64_t) not_taken; }
+  };
+
+  struct SwitchCounts {
+    uint default_count;
+    int number_of_cases;
     bool valid;
   };
-  BranchCounts branch_at(int bci) const;
 
-  // Per-case + default execution counts for a tableswitch/lookupswitch at
-  // `bci`. Appends one count per case to `case_counts` in bytecode order.
-  void switch_at(int bci, GrowableArray<uint>& case_counts,
-                 uint& default_count, bool& valid) const;
+  struct ReceiverProfile {
+    ciKlass* receiver_klass;
+    uint receiver_count;
+    uint site_count;
+    bool valid;
+  };
+
+  int invocation_count() const;
+  BranchCounts branch_at(int bci) const;
+  SwitchCounts switch_at(int bci) const;
+  uint switch_case_count_at(int bci, int index) const;
+  ReceiverProfile monomorphic_receiver_at(int bci) const;
 };
 
 #endif // SHARE_JEANDLE_PROFILE_HPP

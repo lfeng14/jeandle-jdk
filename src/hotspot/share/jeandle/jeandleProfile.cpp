@@ -23,9 +23,30 @@
 #include "jeandle/jeandle_globals.hpp"
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
-#include "ci/ciMethod.hpp"
-#include "ci/ciMethodData.hpp"
 #include "oops/methodData.hpp"
+#include "runtime/globals.hpp"
+
+static ciProfileData* profile_data_at(ciMethodData* mdo, int bci) {
+  if (mdo == nullptr || mdo->is_empty()) {
+    return nullptr;
+  }
+
+  // Use the regular per-bci ProfileData. Passing a method here would look in
+  // the speculative-trap extra-data area instead.
+  return mdo->bci_to_data(bci, nullptr);
+}
+
+static MultiBranchData* multi_branch_data_at(ciMethodData* mdo, int bci) {
+  ciProfileData* data = profile_data_at(mdo, bci);
+  return data != nullptr && data->is_MultiBranchData() ? data->as_MultiBranchData() : nullptr;
+}
+
+static int scaled_count(ciMethod* method, uint count) {
+  if (count > (uint) max_jint) {
+    return -1;
+  }
+  return method != nullptr ? method->scale_count((int) count) : (int) count;
+}
 
 JeandleProfile::JeandleProfile(ciMethod* method)
   : _method(method),
@@ -36,51 +57,128 @@ bool JeandleProfile::has_profile() const {
 }
 
 bool JeandleProfile::is_mature() const {
-  return _mdo != nullptr && _mdo->is_mature();
+  return has_profile() && _mdo->is_mature();
 }
 
-uint JeandleProfile::entry_count() const {
-  if (!JeandleUseProfile || _method == nullptr) {
-    return 0;
+bool JeandleProfile::has_trap_at(int bci, Deoptimization::DeoptReason reason) const {
+  if (_mdo == nullptr) {
+    return false;
   }
-  int count = _method->interpreter_invocation_count();
-  return count > 0 ? (uint) count : 0;
+  // Treat the conservative "maybe trapped here" answer as a real trap for
+  // speculation gating. Metadata-only uses such as branch_weights do not need
+  // this guard; uncommon-trap/speculative transforms do.
+  return _mdo->has_trap_at(bci, nullptr, reason) != 0;
+}
+
+bool JeandleProfile::has_too_many_traps(Deoptimization::DeoptReason reason) const {
+  if (_mdo == nullptr || _mdo->is_empty()) {
+    return false;
+  }
+  return _mdo->trap_count(reason) >= Deoptimization::per_method_trap_limit(reason);
+}
+
+bool JeandleProfile::has_too_many_recompiles(int bci, Deoptimization::DeoptReason reason) const {
+  if (_mdo == nullptr || _mdo->is_empty()) {
+    return false;
+  }
+
+  uint bc_cutoff = (uint) PerBytecodeRecompilationCutoff / 8;
+  uint method_cutoff = (uint) PerMethodRecompilationCutoff / 2 + 1;
+  Deoptimization::DeoptReason per_bc_reason = Deoptimization::reason_recorded_per_bytecode_if_any(reason);
+  ciMethod* trap_method = Deoptimization::reason_is_speculate(reason) ? _method : nullptr;
+
+  if ((per_bc_reason == Deoptimization::Reason_none || _mdo->has_trap_at(bci, trap_method, reason) != 0) &&
+      _mdo->trap_recompiled_at(bci, trap_method) &&
+      _mdo->overflow_recompile_count() >= bc_cutoff) {
+    return true;
+  }
+
+  return _mdo->trap_count(reason) != 0 && _mdo->decompile_count() >= method_cutoff;
+}
+
+bool JeandleProfile::should_use_branch_profile(int taken, int not_taken) const {
+  if (!is_mature() || taken < 0 || not_taken < 0) {
+    return false;
+  }
+
+  int64_t total = (int64_t) taken + (int64_t) not_taken;
+  return total <= (int64_t) max_jint && total >= MinBranchProfileCount;
+}
+
+bool JeandleProfile::should_speculate_branch(int bci,
+                                             Deoptimization::DeoptReason reason,
+                                             int taken,
+                                             int not_taken) const {
+  return should_use_branch_profile(taken, not_taken) &&
+         !has_trap_at(bci, reason) &&
+         !has_too_many_traps(reason) &&
+         !has_too_many_recompiles(bci, reason);
+}
+
+int JeandleProfile::invocation_count() const {
+  return has_profile() ? _mdo->invocation_count() : 0;
 }
 
 JeandleProfile::BranchCounts JeandleProfile::branch_at(int bci) const {
   BranchCounts result = {0, 0, false};
-  if (!has_profile()) {
-    return result;
-  }
-  // Pass nullptr (not _method) so bci_to_data reads the regular per-bci
-  // ProfileData rather than the SpeculativeTrapData extra-data region.
-  ciProfileData* data = _mdo->bci_to_data(bci, nullptr);
+  ciProfileData* data = profile_data_at(_mdo, bci);
   if (data == nullptr || !data->is_BranchData()) {
     return result;
   }
+
   BranchData* branch = data->as_BranchData();
-  result.taken     = branch->taken();
-  result.not_taken = branch->not_taken();
+  result.taken     = scaled_count(_method, branch->taken());
+  result.not_taken = scaled_count(_method, branch->not_taken());
   result.valid     = true;
   return result;
 }
 
-void JeandleProfile::switch_at(int bci, GrowableArray<uint>& case_counts,
-                               uint& default_count, bool& valid) const {
-  valid = false;
-  default_count = 0;
-  if (!has_profile()) {
-    return;
+JeandleProfile::SwitchCounts JeandleProfile::switch_at(int bci) const {
+  SwitchCounts result = {0, 0, false};
+  MultiBranchData* multi_branch = multi_branch_data_at(_mdo, bci);
+  if (multi_branch == nullptr) {
+    return result;
   }
-  ciProfileData* data = _mdo->bci_to_data(bci, nullptr);
-  if (data == nullptr || !data->is_MultiBranchData()) {
-    return;
+
+  result.default_count = multi_branch->default_count();
+  result.number_of_cases = multi_branch->number_of_cases();
+  result.valid = true;
+  return result;
+}
+
+uint JeandleProfile::switch_case_count_at(int bci, int index) const {
+  MultiBranchData* multi_branch = multi_branch_data_at(_mdo, bci);
+  if (multi_branch == nullptr) {
+    return 0;
   }
-  MultiBranchData* multi = data->as_MultiBranchData();
-  default_count = multi->default_count();
-  int num_cases = multi->number_of_cases();
-  for (int i = 0; i < num_cases; i++) {
-    case_counts.append(multi->count_at(i));
+
+  if (index < 0 || index >= multi_branch->number_of_cases()) {
+    return 0;
   }
-  valid = true;
+  return multi_branch->count_at(index);
+}
+
+JeandleProfile::ReceiverProfile JeandleProfile::monomorphic_receiver_at(int bci) const {
+  ReceiverProfile result = {nullptr, 0, 0, false};
+  if (_method == nullptr || !is_mature()) {
+    return result;
+  }
+
+  ciCallProfile profile = _method->call_profile_at_bci(bci);
+  if (profile.morphism() != 1 || !profile.has_receiver(0) || profile.receiver_count(0) <= 0) {
+    return result;
+  }
+
+  ciKlass* receiver = profile.receiver(0);
+  if (receiver == nullptr || !receiver->is_loaded()) {
+    return result;
+  }
+
+  uint receiver_count = (uint) profile.receiver_count(0);
+  uint site_count = profile.count() > 0 ? (uint) profile.count() : receiver_count;
+  result.receiver_klass = receiver;
+  result.receiver_count = receiver_count;
+  result.site_count = site_count;
+  result.valid = true;
+  return result;
 }
