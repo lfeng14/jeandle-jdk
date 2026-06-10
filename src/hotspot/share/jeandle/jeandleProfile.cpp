@@ -24,6 +24,7 @@
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "oops/methodData.hpp"
+#include "opto/c2_globals.hpp"
 #include "runtime/globals.hpp"
 
 static ciProfileData* profile_data_at(ciMethodData* mdo, int bci) {
@@ -67,7 +68,10 @@ bool JeandleProfile::has_trap_at(int bci, Deoptimization::DeoptReason reason) co
   // Treat the conservative "maybe trapped here" answer as a real trap for
   // speculation gating. Metadata-only uses such as branch_weights do not need
   // this guard; uncommon-trap/speculative transforms do.
-  return _mdo->has_trap_at(bci, nullptr, reason) != 0;
+  // For speculate reasons, ciMethodData::has_trap_at requires a non-null method
+  // to look up the speculative extra-data area.
+  ciMethod* trap_method = Deoptimization::reason_is_speculate(reason) ? _method : nullptr;
+  return _mdo->has_trap_at(bci, trap_method, reason) != 0;
 }
 
 bool JeandleProfile::has_too_many_traps(Deoptimization::DeoptReason reason) const {
@@ -110,6 +114,12 @@ bool JeandleProfile::should_speculate_branch(int bci,
                                              int taken,
                                              int not_taken) const {
   return should_use_branch_profile(taken, not_taken) &&
+         !has_trap_at(bci, reason) &&
+         !has_too_many_traps(reason) &&
+         !has_too_many_recompiles(bci, reason);
+}
+bool JeandleProfile::should_speculate_receiver(int bci, Deoptimization::DeoptReason reason) const {
+  return is_mature() &&
          !has_trap_at(bci, reason) &&
          !has_too_many_traps(reason) &&
          !has_too_many_recompiles(bci, reason);
@@ -176,6 +186,69 @@ JeandleProfile::ReceiverProfile JeandleProfile::monomorphic_receiver_at(int bci)
 
   uint receiver_count = (uint) profile.receiver_count(0);
   uint site_count = profile.count() > 0 ? (uint) profile.count() : receiver_count;
+  result.receiver_klass = receiver;
+  result.receiver_count = receiver_count;
+  result.site_count = site_count;
+  result.valid = true;
+  return result;
+}
+
+JeandleProfile::BimorphicReceiverProfile JeandleProfile::bimorphic_receiver_at(int bci) const {
+  BimorphicReceiverProfile result = {nullptr, nullptr, 0, 0, 0, false};
+  if (_method == nullptr || !is_mature()) {
+    return result;
+  }
+
+  ciCallProfile profile = _method->call_profile_at_bci(bci);
+  if (profile.morphism() != 2 || !profile.has_receiver(0) || !profile.has_receiver(1)) {
+    return result;
+  }
+
+  ciKlass* recv0 = profile.receiver(0);
+  ciKlass* recv1 = profile.receiver(1);
+  if (recv0 == nullptr || !recv0->is_loaded() ||
+      recv1 == nullptr || !recv1->is_loaded()) {
+    return result;
+  }
+
+  uint count0 = (uint) profile.receiver_count(0);
+  uint count1 = (uint) profile.receiver_count(1);
+  if (count0 <= 0 || count1 <= 0) {
+    return result;
+  }
+
+  uint site_count = profile.count() > 0 ? (uint) profile.count() : (count0 + count1);
+  result.receiver0 = recv0;
+  result.receiver1 = recv1;
+  result.count0 = count0;
+  result.count1 = count1;
+  result.site_count = site_count;
+  result.valid = true;
+  return result;
+}
+
+JeandleProfile::ReceiverProfile JeandleProfile::major_receiver_at(int bci) const {
+  ReceiverProfile result = {nullptr, 0, 0, false};
+  if (_method == nullptr || !is_mature()) {
+    return result;
+  }
+
+  ciCallProfile profile = _method->call_profile_at_bci(bci);
+  if (!profile.has_receiver(0) || profile.receiver_count(0) <= 0 || profile.count() <= 0) {
+    return result;
+  }
+
+  ciKlass* receiver = profile.receiver(0);
+  if (receiver == nullptr || !receiver->is_loaded()) {
+    return result;
+  }
+
+  uint receiver_count = (uint) profile.receiver_count(0);
+  uint site_count = (uint) profile.count();
+  if (100.0 * (double) receiver_count < (double) TypeProfileMajorReceiverPercent * (double) site_count) {
+    return result;
+  }
+
   result.receiver_klass = receiver;
   result.receiver_count = receiver_count;
   result.site_count = site_count;
