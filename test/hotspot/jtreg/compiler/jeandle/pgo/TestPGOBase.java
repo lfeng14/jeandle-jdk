@@ -60,11 +60,11 @@
  *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::useInterpreterGateTarget
  *      compiler.jeandle.pgo.TestPGOBase useInterpreterGate
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
- *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleDumpIR
+ *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleUseProfile -XX:+JeandleDumpIR
  *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::virtualCallTarget
  *      compiler.jeandle.pgo.TestPGOBase receiverDevirt
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
- *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleDumpIR
+ *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleUseProfile -XX:+JeandleDumpIR
  *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::bimorphicCallTarget
  *      compiler.jeandle.pgo.TestPGOBase bimorphicDevirt
  */
