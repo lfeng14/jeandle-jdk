@@ -222,6 +222,7 @@ class JeandleBasicBlock : public JeandleCompilationResourceObj {
   int _reverse_post_order;
 
   JeandleVMState* _jvm;
+  bool _has_phi_VM_state;
 
   // Use vector to allow duplicate predecessors/successors, except for exception handlers.
   llvm::SmallVector<JeandleBasicBlock*, 8> _predecessors;

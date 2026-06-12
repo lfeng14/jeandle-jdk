@@ -328,6 +328,7 @@ JeandleBasicBlock::JeandleBasicBlock(int block_id,
                                      _limit_bci(limit_bci),
                                      _reverse_post_order(-1),
                                      _jvm(nullptr),
+                                     _has_phi_VM_state(false),
                                      _predecessors(),
                                      _successors(),
                                      _header_llvm_block(header_llvm_block),
@@ -346,17 +347,26 @@ bool JeandleBasicBlock::merge_VM_state_from(JeandleVMState* vm_state, llvm::Basi
       // Just one predecessor. Copy its JeandleVMState.
       assert(!is_set(is_loop_header), "should not be a loop header");
       _jvm = vm_state->copy();
+      _has_phi_VM_state = false;
     } else {
       // More than one predecessors. Set up phi nodes.
       // NOTE: Since we don't know exactly how many predecessor blocks an exception handler will have, we create
       // phi nodes for every exception handler conservatively.
       initialize_VM_state_from(vm_state, incoming, method->liveness_at_bci(_start_bci), is_osr);
+      _has_phi_VM_state = true;
     }
 
     return true;
 
-  } else if (!is_set(is_compiled) && !is_set(is_loop_header)) {
-    assert(_predecessors.size() > 1 || is_exception_handler(), "more than one predecessors are needed for phi nodes");
+  } else if (!is_set(is_loop_header)) {
+    if (!_has_phi_VM_state) {
+      // The state was copied from a single predecessor, so there are no PHI
+      // nodes to update for duplicate edges from that predecessor.
+      return true;
+    }
+    if (is_set(is_compiled)) {
+      return false;
+    }
     return _jvm->update_phi_nodes(vm_state, incoming, is_osr);
   } else if (is_set(is_loop_header)) {
     if (_initial_jvm == nullptr) {
@@ -1393,6 +1403,11 @@ void JeandleAbstractInterpreter::interpret_block(JeandleBasicBlock* block) {
   }
 
   // Add all successors to work list and set up their JeandleVMStates.
+  // A single LLVM block may have multiple edges to the same successor (e.g.,
+  // switch with several cases landing on the same target). LLVM counts each
+  // edge as a separate predecessor for PHI validation, so duplicate effective
+  // edges still need to flow through merge_VM_state_from.
+  llvm::SmallVector<JeandleBasicBlock*, 8> processed_successors;
   for (JeandleBasicBlock* suc : block->successors()) {
     // M2: an edge pruned into an uncommon_trap has no LLVM successor edge from this
     // block, so merging into it would add a PHI incoming for a non-predecessor.
@@ -1400,12 +1415,19 @@ void JeandleAbstractInterpreter::interpret_block(JeandleBasicBlock* block) {
     if (suc == _pruned_successor) {
       continue;
     }
+
+    bool duplicate_edge = llvm::is_contained(processed_successors, suc);
+    if (!duplicate_edge) {
+      processed_successors.push_back(suc);
+    }
+
     // Don't update handlers' VM state here. They are updated by exception throwers.
-    if (!suc->is_exception_handler() && !suc->merge_VM_state_from(block->VM_state(), block->tail_llvm_block(), _method, is_osr())) {
+    if (!suc->is_exception_handler() &&
+        !suc->merge_VM_state_from(block->VM_state(), block->tail_llvm_block(), _method, is_osr())) {
       JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(false, "failed to merge VM state into successor block");
     }
 
-    if (!suc->is_set(JeandleBasicBlock::is_compiled)) {
+    if (!duplicate_edge && !suc->is_set(JeandleBasicBlock::is_compiled)) {
       add_to_work_list(suc);
     }
   }
