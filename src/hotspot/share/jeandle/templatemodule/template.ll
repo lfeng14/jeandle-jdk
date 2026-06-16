@@ -128,6 +128,19 @@ define hotspotcc ptr addrspace(0) @jeandle.load_klass(ptr addrspace(1) nocapture
   ret ptr addrspace(0) %klass
 }
 
+; Exact klass pointer equality check for receiver-profile devirtualization
+; guards. Receives `expected_klass` as a function argument so the 64-bit
+; immediate is materialized at the call site via `movabs r64, imm64`
+; (x86_64) or `movz/movk` (aarch64), avoiding GOT/PC-relative relocations
+; that JITLink's ELF builder does not handle.
+define hotspotcc i1 @jeandle.klass_equals(ptr addrspace(0) nocapture %expected_klass, ptr addrspace(1) nocapture %oop) noinline "lower-phase"="0" {
+  %klass_offset = load i32, ptr @oopDesc.klass_offset_in_bytes
+  %klass_addr = getelementptr inbounds i8, ptr addrspace(1) %oop, i32 %klass_offset
+  %receiver_klass = load atomic ptr addrspace(0), ptr addrspace(1) %klass_addr unordered, align 8
+  %match = icmp eq ptr addrspace(0) %receiver_klass, %expected_klass
+  ret i1 %match
+}
+
 ; This is the slow path for subtype checking when the fast path fails.
 define hotspotcc i1 @jeandle.check_klass_subtype_slow_path(ptr addrspace(0) nocapture %sub_klass, ptr addrspace(0) nocapture %super_klass) "lower-phase"="0" {
 entry:
