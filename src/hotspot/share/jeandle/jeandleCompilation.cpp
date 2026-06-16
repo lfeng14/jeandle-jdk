@@ -353,6 +353,40 @@ void JeandleCompilation::compile_java_method() {
     JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(!is_failed, "module verify failed after optimization in Jeandle compilation");
   });
 
+  // Strip the "CG Profile" module flag added by the optimizer's CGProfilePass.
+  // When present, codegen emits a `.llvm.call-graph-profile` ELF section whose
+  // relocations reference external call targets. JITLink's createLinkGraphFromObject
+  // does not handle this section, causing "failed to create LinkGraph" on x86_64
+  // (the section is generated whenever a hot call edge with branch_weights exists,
+  // such as the receiver-profile devirtualized invoke).
+  if (llvm::NamedMDNode* flags = _llvm_module->getModuleFlagsMetadata()) {
+    llvm::SmallVector<llvm::MDNode*, 4> kept;
+    for (unsigned i = 0; i < flags->getNumOperands(); ++i) {
+      llvm::MDNode* op = flags->getOperand(i);
+      bool drop = false;
+      if (op->getNumOperands() >= 3) {
+        if (auto* key = llvm::dyn_cast<llvm::MDString>(op->getOperand(1))) {
+          if (key->getString() == "CG Profile") {
+            drop = true;
+          }
+        }
+      }
+      if (!drop) {
+        kept.push_back(op);
+      }
+    }
+    if (kept.size() != flags->getNumOperands()) {
+      flags->clearOperands();
+      if (kept.empty()) {
+        flags->eraseFromParent();
+      } else {
+        for (llvm::MDNode* op : kept) {
+          flags->addOperand(op);
+        }
+      }
+    }
+  }
+
   // Dump the VM callback log for this compilation.
   if (JeandleRecordVMCallbacks) {
     std::string dump_path = construct_dump_path(_llvm_module->getModuleIdentifier(), _comp_start_time, ".cblog");
