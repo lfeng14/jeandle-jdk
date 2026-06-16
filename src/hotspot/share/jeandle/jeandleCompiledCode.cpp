@@ -221,13 +221,7 @@ void JeandleCompiledCode::resolve_reloc_info(JeandleAssembler& assembler) {
   auto ssp = std::make_shared<llvm::orc::SymbolStringPool>();
 
   auto graph_or_err = llvm::jitlink::createLinkGraphFromObject(_elf->getMemoryBufferRef(), ssp);
-  if (!graph_or_err) {
-    std::string llvm_msg = llvm::toString(graph_or_err.takeError());
-    tty->print_cr("Jeandle: createLinkGraphFromObject failed: %s", llvm_msg.c_str());
-    JeandleCompilation::report_jeandle_error("failed to create LinkGraph");
-    JEANDLE_CRASH_ON_ERROR("failed to create LinkGraph");
-    return;
-  }
+  JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(graph_or_err, "failed to create LinkGraph");
 
   auto link_graph = std::move(*graph_or_err);
 

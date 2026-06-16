@@ -2489,17 +2489,19 @@ llvm::BasicBlock* JeandleAbstractInterpreter::emit_profile_guard(llvm::Value* ho
 }
 
 llvm::Value* JeandleAbstractInterpreter::emit_klass_check(llvm::Value* receiver, ciKlass* expected_klass) {
-  // Construct expected klass constant. Pass it as a function argument so the
-  // 64-bit immediate is materialized at the call site via `movabs r64, imm64`
-  // (x86_64) or `movz/movk` (aarch64), avoiding GOT/PC-relative relocations
-  // that JITLink's ELF builder rejects on x86_64 in PIC mode.
+  // Load klass from oop: *(receiver + klass_offset_in_bytes)
+  llvm::Value* klass_offset = llvm::ConstantInt::get(_ir_builder.getInt32Ty(), (uint64_t)oopDesc::klass_offset_in_bytes());
+  llvm::Value* klass_addr = _ir_builder.CreateInBoundsGEP(llvm::Type::getInt8Ty(*_context), receiver, klass_offset);
+  llvm::Value* receiver_klass = _ir_builder.CreateLoad(_ir_builder.getPtrTy(), klass_addr);
+
+  // Construct expected klass constant
   Klass* expected_klass_ptr = (Klass*)(expected_klass->constant_encoding());
   llvm::PointerType* klass_type = llvm::PointerType::get(*_context, llvm::jeandle::AddrSpace::CHeapAddrSpace);
   llvm::Value* expected_klass_value = _ir_builder.CreateIntToPtr(
       _ir_builder.getInt64((intptr_t)expected_klass_ptr), klass_type);
 
-  // Exact klass match (not instanceof), matching C2's predicted_call behavior.
-  return call_java_op("jeandle.klass_equals", {expected_klass_value, receiver});
+  // Exact klass match (not instanceof), matching C2's predicted_call behavior
+  return _ir_builder.CreateICmpEQ(receiver_klass, expected_klass_value);
 }
 
 llvm::InvokeInst* JeandleAbstractInterpreter::emit_invoke(
