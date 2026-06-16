@@ -360,22 +360,30 @@ void JeandleCompilation::compile_java_method() {
   // (the section is generated whenever a hot call edge with branch_weights exists,
   // such as the receiver-profile devirtualized invoke).
   if (llvm::NamedMDNode* flags = _llvm_module->getModuleFlagsMetadata()) {
-    for (unsigned i = flags->getNumOperands(); i > 0; --i) {
-      llvm::MDNode* op = flags->getOperand(i - 1);
+    llvm::SmallVector<llvm::MDNode*, 4> kept;
+    for (unsigned i = 0; i < flags->getNumOperands(); ++i) {
+      llvm::MDNode* op = flags->getOperand(i);
+      bool drop = false;
       if (op->getNumOperands() >= 3) {
         if (auto* key = llvm::dyn_cast<llvm::MDString>(op->getOperand(1))) {
           if (key->getString() == "CG Profile") {
-            // Splice operands [i, n) one slot down to remove operand (i-1).
-            for (unsigned j = i; j < flags->getNumOperands(); ++j) {
-              flags->setOperand(j - 1, flags->getOperand(j));
-            }
-            flags->removeOperand(flags->getNumOperands() - 1);
+            drop = true;
           }
         }
       }
+      if (!drop) {
+        kept.push_back(op);
+      }
     }
-    if (flags->getNumOperands() == 0) {
-      flags->eraseFromParent();
+    if (kept.size() != flags->getNumOperands()) {
+      flags->clearOperands();
+      if (kept.empty()) {
+        flags->eraseFromParent();
+      } else {
+        for (llvm::MDNode* op : kept) {
+          flags->addOperand(op);
+        }
+      }
     }
   }
 
