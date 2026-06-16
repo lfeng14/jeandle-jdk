@@ -439,6 +439,7 @@ class JeandleAbstractInterpreter : public StackObj {
                                    llvm::ArrayRef<llvm::OperandBundleDef> deopt_bundle = {});
 
   llvm::OperandBundleDef create_current_deopt_bundle();
+  llvm::OperandBundleDef create_deopt_bundle(JeandleVMState* jvm, int bci);
 
   void add_safepoint_poll();
 
@@ -511,7 +512,11 @@ class JeandleAbstractInterpreter : public StackObj {
 
   void boundary_check(llvm::Value* array_oop, llvm::Value* index);
 
-  void uncommon_trap(Deoptimization::DeoptReason, Deoptimization::DeoptAction, llvm::BasicBlock* insert_block = nullptr);
+  void uncommon_trap(Deoptimization::DeoptReason,
+                     Deoptimization::DeoptAction,
+                     llvm::BasicBlock* insert_block = nullptr,
+                     JeandleVMState* deopt_state = nullptr,
+                     int deopt_bci = -1);
 
   void return_current(llvm::Value* value);
 

@@ -67,6 +67,13 @@
       llvm::Type::getInt32Ty(context),                                              \
       llvm::PointerType::get(context, llvm::jeandle::AddrSpace::CHeapAddrSpace))    \
                                                                                     \
+  def(new_array_from_mirror,                                                        \
+      JeandleRuntimeRoutine::new_array_from_mirror,                                 \
+      llvm::PointerType::get(context, llvm::jeandle::AddrSpace::JavaHeapAddrSpace), \
+      llvm::PointerType::get(context, llvm::jeandle::AddrSpace::JavaHeapAddrSpace), \
+      llvm::Type::getInt32Ty(context),                                              \
+      llvm::PointerType::get(context, llvm::jeandle::AddrSpace::CHeapAddrSpace))    \
+                                                                                    \
   def(multianewarray2,                                                              \
       JeandleRuntimeRoutine::multianewarray2,                                       \
       llvm::PointerType::get(context, llvm::jeandle::AddrSpace::JavaHeapAddrSpace), \
@@ -321,6 +328,14 @@ class JeandleRuntimeRoutine : public AllStatic {
     return _routine_entry.contains(name);
   }
 
+  // Look up a routine entry by name. Returns nullptr if the entry is absent
+  // or if the registered address is null (e.g., StubRoutines not yet generated).
+  static address find_routine_entry(llvm::StringRef name) {
+    auto it = _routine_entry.find(name);
+    if (it == _routine_entry.end()) return nullptr;
+    return it->getValue();
+  }
+
   static bool is_gc_leaf(address addr) {
     return _gc_leaf_routines.contains(addr);
   }
@@ -398,6 +413,7 @@ class JeandleRuntimeRoutine : public AllStatic {
   // Array allocation routine
   static void new_instance(InstanceKlass* klass, JavaThread* current);
   static void new_array(Klass* array_type, int length, JavaThread* current);
+  static void new_array_from_mirror(oopDesc* mirror, int length, JavaThread* current);
 
   // Multi-dimensional array allocation routines
   static void multianewarray2(Klass* elem_type, int len1, int len2, JavaThread* current);

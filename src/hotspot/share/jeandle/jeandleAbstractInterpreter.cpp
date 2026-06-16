@@ -954,7 +954,7 @@ void JeandleAbstractInterpreter::interpret() {
     assert(current->is_set(JeandleBasicBlock::is_loop_header), "sanity");
   }
 
-  if (uint entry_count = _profile.entry_count()) {
+  if (uint entry_count = _profile.invocation_count()) {
     _llvm_func->setEntryCount((uint64_t) entry_count);
   }
 
@@ -1433,7 +1433,11 @@ void JeandleAbstractInterpreter::interpret_block(JeandleBasicBlock* block) {
   }
 }
 
-void JeandleAbstractInterpreter::uncommon_trap(Deoptimization::DeoptReason reason, Deoptimization::DeoptAction action, llvm::BasicBlock* insert_block) {
+void JeandleAbstractInterpreter::uncommon_trap(Deoptimization::DeoptReason reason,
+                                               Deoptimization::DeoptAction action,
+                                               llvm::BasicBlock* insert_block,
+                                               JeandleVMState* deopt_state,
+                                               int deopt_bci) {
 #ifdef ASSERT
   // Structural guard against trap-throttle drift: any deopt reason an intrinsic emits
   // must be in its trap-throttle mask, or try_lower_intrinsic's pre-check would not
@@ -1486,8 +1490,11 @@ void JeandleAbstractInterpreter::uncommon_trap(Deoptimization::DeoptReason reaso
   llvm::Type* ret_type = _llvm_func->getReturnType();
   llvm::Function* deopt_decl = llvm::Intrinsic::getOrInsertDeclaration(
       &_module, llvm::Intrinsic::experimental_deoptimize, {ret_type});
+  llvm::OperandBundleDef deopt_bundle = deopt_state == nullptr
+      ? create_current_deopt_bundle()
+      : create_deopt_bundle(deopt_state, deopt_bci >= 0 ? deopt_bci : _bytecodes.cur_bci());
   llvm::CallInst* call = _ir_builder.CreateCall(
-      deopt_decl, {request}, {create_current_deopt_bundle()});
+      deopt_decl, {request}, {deopt_bundle});
   call->setCallingConv(llvm::CallingConv::Hotspot_JIT);
 
   // LangRef: the block holding this intrinsic must terminate with a `ret`
@@ -1597,33 +1604,31 @@ void JeandleAbstractInterpreter::attach_branch_weights(llvm::BranchInst* br, int
 }
 
 void JeandleAbstractInterpreter::attach_switch_weights(llvm::SwitchInst* switch_inst, int bci) {
-  GrowableArray<uint> case_counts;
-  uint default_count = 0;
-  bool valid = false;
-  _profile.switch_at(bci, case_counts, default_count, valid);
-  if (!valid) {
+  JeandleProfile::SwitchCounts counts = _profile.switch_at(bci);
+  if (!counts.valid) {
     return;
   }
   // A SwitchInst's successors are [default, case0, case1, ...]; the cases were added
   // in bytecode order, matching MultiBranchData::count_at(i). Require an exact size
   // match so a weight can never land on the wrong successor.
-  if (case_counts.length() != (int) switch_inst->getNumCases()) {
+  if (counts.number_of_cases != (int) switch_inst->getNumCases()) {
     return;
   }
   // Clamp zero counts to 1 (see attach_branch_weights): an unpruned switch arm must
   // not be advertised as an impossible edge. Skip attaching entirely only when there
   // is no information at all (every count zero).
   llvm::SmallVector<uint32_t, 8> weights;
-  weights.push_back(default_count == 0 ? 1u : (uint32_t) default_count);
-  bool any_nonzero = default_count != 0;
-  for (int i = 0; i < case_counts.length(); i++) {
-    uint count = case_counts.at(i);
+  weights.push_back(counts.default_count == 0 ? 1u : (uint32_t) counts.default_count);
+  bool any_nonzero = counts.default_count != 0;
+  for (int i = 0; i < counts.number_of_cases; i++) {
+    uint count = _profile.switch_case_count_at(bci, i);
     weights.push_back(count == 0 ? 1u : (uint32_t) count);
     any_nonzero = any_nonzero || (count != 0);
   }
   if (!any_nonzero) {
-    return;  // no information: let LLVM assume a uniform distribution
+    return;
   }
+
   llvm::MDBuilder md_builder(*_context);
   switch_inst->setMetadata(llvm::LLVMContext::MD_prof, md_builder.createBranchWeights(weights));
 }
@@ -1960,7 +1965,7 @@ void JeandleAbstractInterpreter::invoke() {
   // try inline callee as intrinsic
   if (target->is_loaded()
     && target->check_intrinsic_candidate()
-    && inline_intrinsic(target)) {
+    && try_lower_intrinsic(target)) {
     if (log_is_enabled(Debug, jeandle)) {
       ResourceMark rm;
       stringStream ss;
@@ -2472,34 +2477,6 @@ void JeandleAbstractInterpreter::attach_profile_branch_weights(llvm::BranchInst*
                   md_builder.createBranchWeights(hot_weight, cold_weight));
 }
 
-void JeandleAbstractInterpreter::attach_switch_weights(llvm::SwitchInst* switch_inst, int bci) {
-  JeandleProfile::SwitchCounts counts = _profile.switch_at(bci);
-  if (!counts.valid) {
-    return;
-  }
-  // A SwitchInst's successors are [default, case0, case1, ...]; the cases were
-  // added in bytecode order, matching MultiBranchData::count_at(i). Require an
-  // exact size match so a weight can never land on the wrong successor.
-  if (counts.number_of_cases != (int) switch_inst->getNumCases()) {
-    return;
-  }
-
-  llvm::SmallVector<uint32_t, 8> weights;
-  weights.push_back(counts.default_count == 0 ? 1u : (uint32_t) counts.default_count);
-  bool any_nonzero = counts.default_count != 0;
-  for (int i = 0; i < counts.number_of_cases; i++) {
-    uint count = _profile.switch_case_count_at(bci, i);
-    weights.push_back(count == 0 ? 1u : (uint32_t) count);
-    any_nonzero = any_nonzero || (count != 0);
-  }
-  if (!any_nonzero) {
-    return;  // no information: let LLVM assume a uniform distribution
-  }
-
-  llvm::MDBuilder md_builder(*_context);
-  switch_inst->setMetadata(llvm::LLVMContext::MD_prof, md_builder.createBranchWeights(weights));
-}
-
 llvm::BasicBlock* JeandleAbstractInterpreter::emit_profile_uncommon_trap_guard(llvm::Value* hot_condition,
                                                                                const char* name,
                                                                                int bci,
@@ -2953,14 +2930,18 @@ llvm::InvokeInst* JeandleAbstractInterpreter::call_java_op_ex(llvm::StringRef ja
 }
 
 llvm::OperandBundleDef JeandleAbstractInterpreter::create_current_deopt_bundle() {
+  return create_deopt_bundle(_jvm, _bytecodes.cur_bci());
+}
+
+llvm::OperandBundleDef JeandleAbstractInterpreter::create_deopt_bundle(JeandleVMState* jvm, int bci) {
+  assert(jvm != nullptr, "deopt state must be present");
   ensure_orig_pc_slot();
-  int bci = _bytecodes.cur_bci();
   // Per-bci liveness lets deopt_args drop locals that are dead at this bci, so they
   // are not pinned live across the deopt point (cf. C2's liveness-pruned debug info).
   // liveness_at_bci caches the analysis in ciMethod after first use, so this is cheap;
   // in debug modes (retain locals / DeoptimizeALot) it returns all-live -> no pruning.
   MethodLivenessResult liveness = _method->liveness_at_bci(bci);
-  return llvm::OperandBundleDef("deopt", _jvm->deopt_args(_ir_builder, bci, liveness));
+  return llvm::OperandBundleDef("deopt", jvm->deopt_args(_ir_builder, bci, liveness));
 }
 
 llvm::Value* JeandleAbstractInterpreter::find_or_insert_oop(ciObject* oop) {
