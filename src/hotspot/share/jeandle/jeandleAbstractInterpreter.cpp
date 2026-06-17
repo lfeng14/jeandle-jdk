@@ -1962,48 +1962,6 @@ void JeandleAbstractInterpreter::invoke() {
     _compiled_code.set_has_method_handle_invoke(true);
   }
 
-  // try inline callee as intrinsic
-  if (target->is_loaded()
-    && target->check_intrinsic_candidate()
-    && try_lower_intrinsic(target)) {
-    if (log_is_enabled(Debug, jeandle)) {
-      ResourceMark rm;
-      stringStream ss;
-      target->print_name(&ss);
-      log_debug(jeandle)("Method `%s` is parsed as intrinsic", ss.as_string());
-    }
-    return;
-  }
-
-  // try inline callee as intrinsic
-  if (target->is_loaded()
-    && target->check_intrinsic_candidate()
-    && try_lower_intrinsic(target)) {
-    if (log_is_enabled(Debug, jeandle)) {
-      ResourceMark rm;
-      stringStream ss;
-      target->print_name(&ss);
-      log_debug(jeandle)("Method `%s` is parsed as intrinsic", ss.as_string());
-    }
-    return;
-  }
-
-  // Push appendix argument (MethodType, CallSite, etc.), if one.
-  if (_bytecodes.has_appendix()) {
-    assert(Bytecodes::has_optional_appendix(bc), "appendix only valid for invokedynamic or invokehandle");
-    llvm::Value* appendix_oop_handle = find_or_insert_oop(_bytecodes.get_appendix());
-    llvm::Value* appendix_oop = _ir_builder.CreateLoad(JeandleType::java2llvm(BasicType::T_OBJECT, *_context), appendix_oop_handle);
-    _jvm->push(T_OBJECT, appendix_oop);
-  }
-
-  // Special handling for signature-polymorphic methods
-  if (Bytecodes::has_optional_appendix(bc)) {
-    assert(target->is_method_handle_intrinsic() || target->is_compiled_lambda_form(), "no a target for methodhandle invoke");
-    method_signature = target->signature();
-  } else {
-    assert(method_signature == target->signature(), "method signature unmatched");
-  }
-
   // Additional receiver subtype checks for interface calls via invokespecial or invokeinterface.
   ciKlass* receiver_constraint = nullptr;
   if (bc == Bytecodes::_invokespecial && !target->is_object_initializer()) {
@@ -2043,6 +2001,35 @@ void JeandleAbstractInterpreter::invoke() {
 
     _ir_builder.SetInsertPoint(checkcast_pass);
     _block->set_tail_llvm_block(checkcast_pass);
+  }
+
+  // try inline callee as intrinsic
+  if (target->is_loaded()
+    && target->check_intrinsic_candidate()
+    && try_lower_intrinsic(target)) {
+    if (log_is_enabled(Debug, jeandle)) {
+      ResourceMark rm;
+      stringStream ss;
+      target->print_name(&ss);
+      log_debug(jeandle)("Method `%s` is parsed as intrinsic", ss.as_string());
+    }
+    return;
+  }
+
+  // Push appendix argument (MethodType, CallSite, etc.), if one.
+  if (_bytecodes.has_appendix()) {
+    assert(Bytecodes::has_optional_appendix(bc), "appendix only valid for invokedynamic or invokehandle");
+    llvm::Value* appendix_oop_handle = find_or_insert_oop(_bytecodes.get_appendix());
+    llvm::Value* appendix_oop = _ir_builder.CreateLoad(JeandleType::java2llvm(BasicType::T_OBJECT, *_context), appendix_oop_handle);
+    _jvm->push(T_OBJECT, appendix_oop);
+  }
+
+  // Special handling for signature-polymorphic methods
+  if (Bytecodes::has_optional_appendix(bc)) {
+    assert(target->is_method_handle_intrinsic() || target->is_compiled_lambda_form(), "no a target for methodhandle invoke");
+    method_signature = target->signature();
+  } else {
+    assert(method_signature == target->signature(), "method signature unmatched");
   }
 
   // Devirtualize based on receiver profile (monomorphic or bimorphic).
