@@ -36,6 +36,7 @@
 #include "jeandle/templatemodule/jeandleRuntimeDefinedJavaOps.hpp"
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
+#include "compiler/compilerDefinitions.hpp"
 #include "runtime/arguments.hpp"
 
 namespace {
@@ -136,6 +137,11 @@ void JeandleCompiler::initialize() {
 
 void JeandleCompiler::compile_method(ciEnv* env, ciMethod* target, int entry_bci, bool install_code, DirectiveSet* directive) {
   ResourceMark rm;
+  tty->print_cr("JEANDLE_COMPILE: level=%d %s.%s entry_bci=%d install=%d",
+                CompLevel_full_optimization,
+                target->holder()->name()->as_utf8(),
+                target->name()->as_utf8(),
+                entry_bci, (int)install_code);
   JeandleCompilation compilation(target_machine(), data_layout(), env, target, entry_bci, install_code, _template_buffer.get());
 }
 

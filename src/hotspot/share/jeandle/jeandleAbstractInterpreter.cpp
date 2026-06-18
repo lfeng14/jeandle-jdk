@@ -1602,9 +1602,23 @@ void JeandleAbstractInterpreter::if_acmp(llvm::CmpInst::Predicate p) {
   llvm::Value* r = _jvm->apop();
   llvm::Value* l = _jvm->apop();
   llvm::Value* cond = _ir_builder.CreateICmp(p, l, r);
+  JeandleBasicBlock* taken_succ = bci2block()[_bytecodes.get_dest()];
+  JeandleBasicBlock* fallthrough_succ = bci2block()[_bytecodes.next_bci()];
+
+  switch (branch_profile_uncommon()) {
+    case ColdTakenPath:
+      taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdUntakenPath:
+      fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdNone:
+    default:
+      break;
+  }
   _ir_builder.CreateCondBr(cond,
-                           bci2block()[_bytecodes.get_dest()]->header_llvm_block(),
-                           bci2block()[_bytecodes.next_bci()]->header_llvm_block());
+                           taken_succ->header_llvm_block(),
+                           fallthrough_succ->header_llvm_block());
 }
 
 void JeandleAbstractInterpreter::if_null(llvm::CmpInst::Predicate p) {
@@ -1613,9 +1627,23 @@ void JeandleAbstractInterpreter::if_null(llvm::CmpInst::Predicate p) {
   }
   llvm::Value* v = _jvm->apop();
   llvm::Value* cond = _ir_builder.CreateICmp(p, v, llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(v->getType())));
+  JeandleBasicBlock* taken_succ = bci2block()[_bytecodes.get_dest()];
+  JeandleBasicBlock* fallthrough_succ = bci2block()[_bytecodes.next_bci()];
+
+  switch (branch_profile_uncommon()) {
+    case ColdTakenPath:
+      taken_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdUntakenPath:
+      fallthrough_succ->set(JeandleBasicBlock::always_uncommon_trap);
+      break;
+    case ColdNone:
+    default:
+      break;
+  }
   _ir_builder.CreateCondBr(cond,
-                           bci2block()[_bytecodes.get_dest()]->header_llvm_block(),
-                           bci2block()[_bytecodes.next_bci()]->header_llvm_block());
+                           taken_succ->header_llvm_block(),
+                           fallthrough_succ->header_llvm_block());
 }
 
 /*

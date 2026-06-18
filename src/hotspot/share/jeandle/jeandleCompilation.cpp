@@ -319,7 +319,15 @@ void JeandleCompilation::compile_java_method() {
   RETURN_VOID_ON_JEANDLE_ERROR();
 
   // Verify module, if failes, crashes in debug builds and only reports compilation error in release builds.
-  bool is_failed = llvm::verifyModule(*_llvm_module, &llvm::errs());
+  std::string verify_err;
+  llvm::raw_string_ostream verify_os(verify_err);
+  bool is_failed = llvm::verifyModule(*_llvm_module, &verify_os);
+  if (is_failed) {
+    tty->print_cr("LLVM module verification failed for %s.%s: %s",
+                  _method->holder()->name()->as_utf8(),
+                  _method->name()->as_utf8(),
+                  verify_err.c_str());
+  }
   JEANDLE_ERROR_ASSERT_AND_RET_VOID_ON_FAIL(!is_failed, "module verify failed in Jeandle compilation");
 
   // Scope the VM callback recorder to the optimization step.
