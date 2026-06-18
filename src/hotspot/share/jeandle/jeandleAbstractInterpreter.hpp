@@ -380,9 +380,9 @@ class JeandleAbstractInterpreter : public StackObj {
   // an uncommon_trap, or emits a two-way branch with MDO weights. Must be
   // called before the if_* helper pops its operands, so a pruned trap's deopt
   // bundle still captures the pre-if operand stack.
-  void do_if_branch(llvm::Value* cond);
-  bool path_is_suitable_for_unstable_if_prune(int bci, JeandleProfile::BranchCounts counts);
-  void attach_branch_weights(llvm::BranchInst* br, int bci);
+  void do_if_branch(llvm::Value* cond, llvm::CmpInst::Predicate p);
+  bool try_emit_unstable_if_trap(llvm::Value* cond);
+  void attach_branch_weights(llvm::BranchInst* br, int bci, llvm::CmpInst::Predicate p);
   void attach_switch_weights(llvm::SwitchInst* switch_inst, int bci);
   void fcmp(BasicType type, bool true_if_unordered);
   void lcmp();
