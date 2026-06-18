@@ -1587,20 +1587,31 @@ void JeandleAbstractInterpreter::increment() {
   _jvm->istore(_bytecodes.get_index(), result);
 }
 
-void JeandleAbstractInterpreter::attach_branch_weights(llvm::BranchInst* br, int bci) {
-  JeandleProfile::BranchCounts counts = _profile.branch_at(bci);
-  if (!counts.valid || (counts.taken == 0 && counts.not_taken == 0)) {
+void JeandleAbstractInterpreter::attach_branch_weights(llvm::BranchInst* br, int bci, llvm::CmpInst::Predicate p) {
+  if (br->getNumSuccessors() != 2 || br->getSuccessor(0) == br->getSuccessor(1)) {
     return;
   }
-  // Clamp zero counts to 1: an unpruned branch must not advertise an impossible
-  // edge to LLVM. A genuinely-never-observed strict-zero side is handled by M2
-  // pruning; reaching here with a 0 count means immature profile, where 0 is
-  // "rare" rather than "impossible".
-  uint32_t taken_weight     = counts.taken     == 0 ? 1u : (uint32_t) counts.taken;
-  uint32_t not_taken_weight = counts.not_taken == 0 ? 1u : (uint32_t) counts.not_taken;
-  llvm::MDBuilder md_builder(*_context);
-  br->setMetadata(llvm::LLVMContext::MD_prof,
-                  md_builder.createBranchWeights(taken_weight, not_taken_weight));
+
+  JeandleProfile::BranchCounts counts = _profile.branch_at(bci);
+  if (counts.valid && _profile.should_use_branch_profile(counts.taken, counts.not_taken)) {
+    // Clamp zero counts to 1: an unpruned branch must not advertise an
+    // impossible edge to LLVM. Strict-zero one-sided observations are handled
+    // by try_emit_unstable_if_trap; reaching here means the profile is usable
+    // but a side may still be 0 (immature counters).
+    attach_profile_branch_weights(br, (uint) counts.taken, (uint) counts.not_taken);
+    return;
+  }
+
+  // Match C2's static fallback in Parse::branch_prediction: equality tests are
+  // unlikely, inequality tests are likely, and backward branches are likely
+  // loop backedges. The backward-branch rule wins over eq/ne, as in C2.
+  if (_bytecodes.get_dest() < bci) {
+    attach_profile_branch_weights(br, 9, 1);
+  } else if (p == llvm::CmpInst::ICMP_EQ) {
+    attach_profile_branch_weights(br, 1, 9);
+  } else if (p == llvm::CmpInst::ICMP_NE) {
+    attach_profile_branch_weights(br, 9, 1);
+  }
 }
 
 void JeandleAbstractInterpreter::attach_switch_weights(llvm::SwitchInst* switch_inst, int bci) {
@@ -1633,27 +1644,77 @@ void JeandleAbstractInterpreter::attach_switch_weights(llvm::SwitchInst* switch_
   switch_inst->setMetadata(llvm::LLVMContext::MD_prof, md_builder.createBranchWeights(weights));
 }
 
-// Mirrors C2's path_is_suitable_for_uncommon_trap: gate the strict-zero
-// unstable-if prune on a mature profile, a meaningful sample count, and a
-// trap history that hasn't already de-speculated this bci.
-bool JeandleAbstractInterpreter::path_is_suitable_for_unstable_if_prune(
-    int bci, JeandleProfile::BranchCounts counts) {
-  // OSR sees a partially-warmed profile; the unobserved side may just be a
-  // path the resumed frame hasn't reached yet.
-  if (is_osr()) {
+// Strict-zero one-side prune: emit a profile_branch klass-shaped guard whose
+// miss path deopts via llvm.experimental.deoptimize (Reason_unstable_if). This
+// keeps the deopt edge visible to LLVM (and to JITLink/CGProfile, etc.) and
+// shares the IR shape with profile-based devirtualization.
+bool JeandleAbstractInterpreter::try_emit_unstable_if_trap(llvm::Value* cond) {
+  // No interpreter to deopt back into; speculation would be unrecoverable.
+  if (!UseInterpreter) {
     return false;
   }
-  if (!_profile.is_mature() || !counts.valid) {
+
+  int bci = _bytecodes.cur_bci();
+  JeandleProfile::BranchCounts counts = _profile.branch_at(bci);
+  if (!counts.valid ||
+      (counts.taken != 0 && counts.not_taken != 0) ||
+      (counts.taken == 0 && counts.not_taken == 0) ||
+      !_profile.should_speculate_branch(bci, Deoptimization::Reason_unstable_if,
+                                        counts.taken, counts.not_taken)) {
     return false;
   }
-  // C2's counters_are_meaningful threshold.
-  if (counts.taken + counts.not_taken < 40) {
+
+  JeandleBasicBlock* taken_jbb = bci2block()[_bytecodes.get_dest()];
+  JeandleBasicBlock* fallthrough_jbb = bci2block()[_bytecodes.next_bci()];
+  if (taken_jbb == fallthrough_jbb) {
     return false;
   }
-  return !too_many_traps(_method, bci, Deoptimization::Reason_unstable_if);
+
+  JeandleBasicBlock* hot_jbb = nullptr;
+  JeandleBasicBlock* cold_jbb = nullptr;
+  llvm::Value* hot_condition = nullptr;
+  uint hot_count = 0;
+  uint cold_count = 1;
+
+  if (counts.taken == 0) {
+    hot_jbb = fallthrough_jbb;
+    cold_jbb = taken_jbb;
+    hot_condition = _ir_builder.CreateNot(cond);
+    hot_count = (uint) counts.not_taken;
+  } else {
+    hot_jbb = taken_jbb;
+    cold_jbb = fallthrough_jbb;
+    hot_condition = cond;
+    hot_count = (uint) counts.taken;
+  }
+
+  if (hot_jbb->is_exception_handler()) {
+    merge_into_exception_handler(hot_jbb);
+  }
+
+  // Capture pre-pop deopt state: the if_* helpers peek instead of pop, so the
+  // operand(s) consumed by this if are still on the stack and the deopt bundle
+  // captures the interpreter-visible frame at this bci.
+  JeandleVMState* deopt_state = _jvm->copy();
+
+  emit_profile_uncommon_trap_guard(hot_condition,
+                                   "profile_branch",
+                                   bci,
+                                   hot_count,
+                                   cold_count,
+                                   Deoptimization::Reason_unstable_if,
+                                   Deoptimization::Action_reinterpret,
+                                   deopt_state,
+                                   bci);
+  // emit_profile_uncommon_trap_guard moved insert point + JBB tail to hit_block.
+  // Branch hit_block to the hot successor; the cold successor is pruned from
+  // the post-loop phi merge.
+  _ir_builder.CreateBr(hot_jbb->header_llvm_block());
+  _pruned_successor = cold_jbb;
+  return true;
 }
 
-void JeandleAbstractInterpreter::do_if_branch(llvm::Value* cond) {
+void JeandleAbstractInterpreter::do_if_branch(llvm::Value* cond, llvm::CmpInst::Predicate p) {
   int bci = _bytecodes.cur_bci();
   JeandleBasicBlock* taken_jbb = bci2block()[_bytecodes.get_dest()];
   JeandleBasicBlock* fallthrough_jbb = bci2block()[_bytecodes.next_bci()];
@@ -1673,48 +1734,12 @@ void JeandleAbstractInterpreter::do_if_branch(llvm::Value* cond) {
     return;
   }
 
-  // M2: strict-zero one-side prune into uncommon_trap(Reason_unstable_if).
+  // M2: strict-zero one-side prune via profile_branch guard + deoptimize.
   // Operands are still on the stack here -- if_* helpers defer the pop until
   // after this returns so the trap deopt bundle sees pre-if state, same effect
   // as C2's repush_if_args() without re-pushing.
-  JeandleProfile::BranchCounts counts = _profile.branch_at(bci);
-  if (path_is_suitable_for_unstable_if_prune(bci, counts)) {
-    auto emit_pruned_branch = [&](JeandleBasicBlock* hot_jbb,
-                                  llvm::BasicBlock* hot_block,
-                                  bool cond_true_is_hot,
-                                  JeandleBasicBlock* pruned_jbb) {
-      if (hot_jbb->is_exception_handler()) {
-        merge_into_exception_handler(hot_jbb);
-      }
-      llvm::BasicBlock* trap_block =
-          llvm::BasicBlock::Create(*_context, "unstable_if_trap", _llvm_func);
-      llvm::BranchInst* br =
-          cond_true_is_hot ? _ir_builder.CreateCondBr(cond, hot_block, trap_block)
-                           : _ir_builder.CreateCondBr(cond, trap_block, hot_block);
-      llvm::MDBuilder md_builder(*_context);
-      uint32_t hot_weight  = 0x7FFFFFFFu;
-      uint32_t cold_weight = 1u;
-      br->setMetadata(llvm::LLVMContext::MD_prof,
-                      md_builder.createBranchWeights(
-                          cond_true_is_hot ? hot_weight : cold_weight,
-                          cond_true_is_hot ? cold_weight : hot_weight));
-      uncommon_trap(Deoptimization::Reason_unstable_if,
-                    Deoptimization::Action_reinterpret, trap_block);
-      // Skip the pruned JBB in the post-loop successor merge; its preallocated
-      // header_llvm_block is reclaimed by remove_dead_blocks.
-      _pruned_successor = pruned_jbb;
-    };
-
-    if (counts.taken == 0 && counts.not_taken > 0) {
-      emit_pruned_branch(fallthrough_jbb, fallthrough_block, /*cond_true_is_hot=*/false,
-                         bci2block()[_bytecodes.get_dest()]);
-      return;
-    }
-    if (counts.not_taken == 0 && counts.taken > 0) {
-      emit_pruned_branch(taken_jbb, taken_block, /*cond_true_is_hot=*/true,
-                         bci2block()[_bytecodes.next_bci()]);
-      return;
-    }
+  if (try_emit_unstable_if_trap(cond)) {
+    return;
   }
 
   if (taken_jbb->is_exception_handler()) {
@@ -1724,7 +1749,7 @@ void JeandleAbstractInterpreter::do_if_branch(llvm::Value* cond) {
     merge_into_exception_handler(fallthrough_jbb);
   }
   llvm::BranchInst* br = _ir_builder.CreateCondBr(cond, taken_block, fallthrough_block);
-  attach_branch_weights(br, bci);
+  attach_branch_weights(br, bci, p);
 }
 
 void JeandleAbstractInterpreter::if_zero(llvm::CmpInst::Predicate p) {
@@ -1734,7 +1759,7 @@ void JeandleAbstractInterpreter::if_zero(llvm::CmpInst::Predicate p) {
   // Peek (do not pop): a pruned uncommon_trap must see the operand on the stack.
   llvm::Value* v = _jvm->raw_peek(0).value();
   llvm::Value* cond = _ir_builder.CreateICmp(p, v, JeandleType::int_const(_ir_builder, 0));
-  do_if_branch(cond);
+  do_if_branch(cond, p);
   _jvm->ipop();
 }
 
@@ -1746,7 +1771,7 @@ void JeandleAbstractInterpreter::if_icmp(llvm::CmpInst::Predicate p) {
   llvm::Value* r = _jvm->raw_peek(0).value();
   llvm::Value* l = _jvm->raw_peek(1).value();
   llvm::Value* cond = _ir_builder.CreateICmp(p, l, r);
-  do_if_branch(cond);
+  do_if_branch(cond, p);
   _jvm->ipop();
   _jvm->ipop();
 }
@@ -1769,7 +1794,7 @@ void JeandleAbstractInterpreter::if_acmp(llvm::CmpInst::Predicate p) {
   llvm::Value* r = _jvm->raw_peek(0).value();
   llvm::Value* l = _jvm->raw_peek(1).value();
   llvm::Value* cond = _ir_builder.CreateICmp(p, l, r);
-  do_if_branch(cond);
+  do_if_branch(cond, p);
   _jvm->apop();
   _jvm->apop();
 }
@@ -1781,7 +1806,7 @@ void JeandleAbstractInterpreter::if_null(llvm::CmpInst::Predicate p) {
   // Peek (do not pop): a pruned uncommon_trap must see the operand on the stack.
   llvm::Value* v = _jvm->raw_peek(0).value();
   llvm::Value* cond = _ir_builder.CreateICmp(p, v, llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(v->getType())));
-  do_if_branch(cond);
+  do_if_branch(cond, p);
   _jvm->apop();
 }
 
