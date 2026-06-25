@@ -408,6 +408,9 @@ class JeandleAbstractInterpreter : public StackObj {
                                        uint hot_count,
                                        uint cold_count,
                                        llvm::BasicBlock** miss_block_out);
+  bool select_profiled_type_check_receiver(int bci,
+                                           ciKlass* target_klass,
+                                           JeandleProfile::ReceiverProfile* receiver_profile);
   llvm::Value* emit_klass_check(llvm::Value* receiver, ciKlass* expected_klass);
   llvm::InvokeInst* emit_invoke(ciMethod* callee_method,
                                 JeandleCompiledCall::Type call_type,
