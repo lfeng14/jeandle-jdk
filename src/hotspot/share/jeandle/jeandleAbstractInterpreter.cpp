@@ -2526,6 +2526,43 @@ llvm::BasicBlock* JeandleAbstractInterpreter::emit_profile_guard(llvm::Value* ho
   return hit_block;
 }
 
+bool JeandleAbstractInterpreter::select_profiled_type_check_receiver(
+    int bci,
+    ciKlass* target_klass,
+    JeandleProfile::ReceiverProfile* receiver_profile) {
+  if (target_klass == nullptr || !target_klass->is_loaded() ||
+      receiver_profile == nullptr) {
+    return false;
+  }
+
+  // TypeProfileCasts records receiver klasses for checkcast/instanceof/aastore
+  // in the same receiver-profile shape that call-site devirtualization uses.
+  // Prefer strict monomorphic data. If the site is not strictly monomorphic,
+  // accept a dominant receiver and keep the minority types on the full slow
+  // check path.
+  JeandleProfile::ReceiverProfile profile = _profile.monomorphic_receiver_at(bci);
+  if (!profile.valid) {
+    profile = _profile.major_receiver_at(bci);
+  }
+
+  if (!profile.valid ||
+      !_profile.should_speculate_receiver(bci, Deoptimization::Reason_class_check)) {
+    return false;
+  }
+
+  // This helper only creates a fast-success path. The profiled exact klass must
+  // be statically known to satisfy the bytecode target; all misses still execute
+  // the original subtype helper, so uncommon receiver types keep normal Java
+  // semantics instead of deoptimizing.
+  if (profile.receiver_klass == nullptr || !profile.receiver_klass->is_loaded() ||
+      !profile.receiver_klass->is_subtype_of(target_klass)) {
+    return false;
+  }
+
+  *receiver_profile = profile;
+  return true;
+}
+
 llvm::Value* JeandleAbstractInterpreter::emit_klass_check(llvm::Value* receiver, ciKlass* expected_klass) {
   // Load klass from oop: *(receiver + klass_offset_in_bytes)
   llvm::Value* klass_offset = llvm::ConstantInt::get(_ir_builder.getInt32Ty(), (uint64_t)oopDesc::klass_offset_in_bytes());
@@ -2812,12 +2849,46 @@ void JeandleAbstractInterpreter::checkcast() {
   llvm::Value* super_klass_addr = _ir_builder.getInt64((intptr_t)super_klass);
   llvm::Value* super_klass_ptr = _ir_builder.CreateIntToPtr(super_klass_addr,klass_type);
 
-  llvm::CallInst* call = call_java_op("jeandle.checkcast", {super_klass_ptr, obj});
-
   int cur_bci = _bytecodes.cur_bci();
   llvm::BasicBlock* checkcast_pass = llvm::BasicBlock::Create(*_context,
                                                                "bci_" + std::to_string(cur_bci) + "_checkcast_pass",
                                                                _llvm_func);
+
+  JeandleProfile::ReceiverProfile type_profile;
+  if (select_profiled_type_check_receiver(cur_bci, ci_super_klass, &type_profile)) {
+    llvm::BasicBlock* profile_check = llvm::BasicBlock::Create(
+        *_context,
+        "bci_" + std::to_string(cur_bci) + "_checkcast_profile_check",
+        _llvm_func);
+
+    // The exact klass load is only legal for non-null oops. A null checkcast
+    // succeeds by Java semantics, so send null directly to the common pass
+    // continuation and guard only the non-null path.
+    llvm::PointerType* obj_type = llvm::cast<llvm::PointerType>(obj->getType());
+    llvm::Value* null_obj = llvm::ConstantPointerNull::get(obj_type);
+    llvm::Value* is_null = _ir_builder.CreateICmpEQ(obj, null_obj);
+    _ir_builder.CreateCondBr(is_null, checkcast_pass, profile_check);
+
+    _ir_builder.SetInsertPoint(profile_check);
+    llvm::Value* klass_match = emit_klass_check(obj, type_profile.receiver_klass);
+    uint miss_count = type_profile.site_count > type_profile.receiver_count
+        ? type_profile.site_count - type_profile.receiver_count
+        : 1;
+
+    llvm::BasicBlock* checkcast_slow = nullptr;
+    emit_profile_guard(klass_match, "profile_checkcast", cur_bci,
+                       type_profile.receiver_count, miss_count, &checkcast_slow);
+    _ir_builder.CreateBr(checkcast_pass);
+
+    // Profile misses still execute the original helper. This keeps uncommon
+    // receiver classes and failed casts on the normal ClassCastException path
+    // instead of treating a profile miss as a failed type check.
+    _ir_builder.SetInsertPoint(checkcast_slow);
+    _block->set_tail_llvm_block(checkcast_slow);
+  }
+
+  llvm::CallInst* call = call_java_op("jeandle.checkcast", {super_klass_ptr, obj});
+
   llvm::BasicBlock* checkcast_fail = llvm::BasicBlock::Create(*_context,
                                                                "bci_" + std::to_string(cur_bci) + "_checkcast_fail",
                                                                _llvm_func);
@@ -2850,6 +2921,64 @@ void JeandleAbstractInterpreter::instanceof(int klass_index) {
   llvm::PointerType* klass_type = llvm::PointerType::get(*_context, llvm::jeandle::AddrSpace::CHeapAddrSpace);
   llvm::Value* super_klass_addr = _ir_builder.getInt64((intptr_t)super_klass);
   llvm::Value* super_klass_ptr = _ir_builder.CreateIntToPtr(super_klass_addr, klass_type);
+
+  int cur_bci = _bytecodes.cur_bci();
+  JeandleProfile::ReceiverProfile type_profile;
+  if (select_profiled_type_check_receiver(cur_bci, ci_super_klass, &type_profile)) {
+    llvm::BasicBlock* null_block = llvm::BasicBlock::Create(
+        *_context,
+        "bci_" + std::to_string(cur_bci) + "_instanceof_null",
+        _llvm_func);
+    llvm::BasicBlock* profile_check = llvm::BasicBlock::Create(
+        *_context,
+        "bci_" + std::to_string(cur_bci) + "_instanceof_profile_check",
+        _llvm_func);
+    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(
+        *_context,
+        "bci_" + std::to_string(cur_bci) + "_instanceof_merge",
+        _llvm_func);
+
+    // Null is a guaranteed false result for instanceof. Keep it outside the
+    // profiled exact-klass guard because the guard loads the object's klass.
+    llvm::PointerType* obj_type = llvm::cast<llvm::PointerType>(obj->getType());
+    llvm::Value* null_obj = llvm::ConstantPointerNull::get(obj_type);
+    llvm::Value* is_null = _ir_builder.CreateICmpEQ(obj, null_obj);
+    _ir_builder.CreateCondBr(is_null, null_block, profile_check);
+
+    _ir_builder.SetInsertPoint(null_block);
+    _ir_builder.CreateBr(merge_block);
+
+    _ir_builder.SetInsertPoint(profile_check);
+    llvm::Value* klass_match = emit_klass_check(obj, type_profile.receiver_klass);
+    uint miss_count = type_profile.site_count > type_profile.receiver_count
+        ? type_profile.site_count - type_profile.receiver_count
+        : 1;
+
+    llvm::BasicBlock* instanceof_slow = nullptr;
+    emit_profile_guard(klass_match, "profile_instanceof", cur_bci,
+                       type_profile.receiver_count, miss_count, &instanceof_slow);
+    llvm::BasicBlock* profile_hit = _ir_builder.GetInsertBlock();
+    _ir_builder.CreateBr(merge_block);
+
+    // Misses fall back to the complete instanceof helper. This is deliberately
+    // a fast-success optimization only; cold receiver classes still compute the
+    // real subtype relation.
+    _ir_builder.SetInsertPoint(instanceof_slow);
+    llvm::CallInst* slow_result =
+        call_java_op("jeandle.instanceof", {super_klass_ptr, obj});
+    llvm::BasicBlock* slow_done = _ir_builder.GetInsertBlock();
+    _ir_builder.CreateBr(merge_block);
+
+    _ir_builder.SetInsertPoint(merge_block);
+    llvm::PHINode* result = _ir_builder.CreatePHI(_ir_builder.getInt32Ty(), 3);
+    result->addIncoming(_ir_builder.getInt32(0), null_block);
+    result->addIncoming(_ir_builder.getInt32(1), profile_hit);
+    result->addIncoming(slow_result, slow_done);
+
+    _jvm->ipush(result);
+    _block->set_tail_llvm_block(merge_block);
+    return;
+  }
 
   llvm::CallInst* call = call_java_op("jeandle.instanceof", {super_klass_ptr, obj});
 
