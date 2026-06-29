@@ -170,6 +170,7 @@ uint JeandleProfile::switch_case_count_at(int bci, int index) const {
 
 JeandleProfile::ReceiverProfile JeandleProfile::receiver_at(int bci) const {
   ReceiverProfile result = {0, nullptr, nullptr, 0, 0, 0, false, false};
+  // Receiver devirtualization follows the VM-wide type-profile switch.
   if (_method == nullptr || !UseTypeProfile || !is_mature()) {
     return result;
   }
@@ -187,6 +188,7 @@ JeandleProfile::ReceiverProfile JeandleProfile::receiver_at(int bci) const {
   int count0 = profile.receiver_count(0);
   int count1 = 0;
   ciKlass* receiver1 = nullptr;
+  // The profile stores at most the two hottest receiver classes.
   if (profile.has_receiver(1)) {
     count1 = profile.receiver_count(1);
     receiver1 = profile.receiver(1);
@@ -203,6 +205,8 @@ JeandleProfile::ReceiverProfile JeandleProfile::receiver_at(int bci) const {
   result.count0 = (uint) count0;
   result.count1 = (uint) count1;
   result.site_count = site_count;
+  // A major receiver is hot enough to justify a direct fast path while
+  // keeping a virtual call for all minority receiver classes.
   result.has_major_receiver =
       100.0 * (double) count0 >=
       (double) TypeProfileMajorReceiverPercent * (double) site_count;

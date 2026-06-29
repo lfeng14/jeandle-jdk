@@ -400,13 +400,17 @@ class JeandleAbstractInterpreter : public StackObj {
     };
 
     Kind kind;
+    // Profiled receiver classes and their resolved concrete methods.
     ciKlass* receiver0;
     ciKlass* receiver1;
     ciMethod* target0;
     ciMethod* target1;
+    // Counts are used to attach branch weights to receiver guards.
     uint count0;
     uint count1;
     uint site_count;
+    // True means an unknown receiver deoptimizes; false means it uses a
+    // regular virtual-call fallback.
     bool deoptimize_on_miss;
     Deoptimization::DeoptReason miss_reason;
 

@@ -1959,6 +1959,8 @@ JeandleAbstractInterpreter::select_receiver_devirtualization(ciMethod* target,
   result.count0 = profile.count0;
   result.site_count = profile.site_count;
 
+  // Two usable profiled receivers get two direct-call paths. An unknown third
+  // receiver deoptimizes only while this speculation is still allowed.
   if (profile.morphism == 2 && profile.receiver1 != nullptr) {
     ciMethod* target1 = target->resolve_invoke(_method->holder(), profile.receiver1);
     if (target1 != nullptr) {
@@ -1978,6 +1980,8 @@ JeandleAbstractInterpreter::select_receiver_devirtualization(ciMethod* target,
     return result;
   }
 
+  // A monomorphic call uses one direct-call path. If earlier class-check
+  // failures disabled speculation, its miss path falls back to a virtual call.
   if (profile.morphism == 1) {
     result.kind = ReceiverDevirtualization::monomorphic;
     result.miss_reason = Deoptimization::Reason_class_check;
@@ -1986,6 +1990,7 @@ JeandleAbstractInterpreter::select_receiver_devirtualization(ciMethod* target,
     return result;
   }
 
+  // Polymorphic sites only get a fast path when one receiver dominates.
   if (profile.has_major_receiver) {
     result.kind = ReceiverDevirtualization::major_receiver;
   }
@@ -2026,6 +2031,7 @@ bool JeandleAbstractInterpreter::emit_receiver_devirtualized_invoke(
   BasicType return_type = method_signature->return_type()->basic_type();
   address opt_virtual_stub = SharedRuntime::get_resolve_opt_virtual_call_stub();
 
+  // Stable monomorphic site: exact-class guard, direct call, deopt on miss.
   if (devirtualization.kind == ReceiverDevirtualization::monomorphic &&
       devirtualization.deoptimize_on_miss) {
     JeandleVMState* deopt_state = _jvm->copy();
@@ -2056,6 +2062,8 @@ bool JeandleAbstractInterpreter::emit_receiver_devirtualized_invoke(
     return true;
   }
 
+  // Bimorphic site: try receiver0, then receiver1. The final miss either
+  // deoptimizes or uses a virtual call when speculation has been throttled.
   if (devirtualization.kind == ReceiverDevirtualization::bimorphic) {
     JeandleVMState* deopt_state = devirtualization.deoptimize_on_miss ? _jvm->copy() : nullptr;
     llvm::SmallVector<llvm::Value*> args;
@@ -2109,6 +2117,8 @@ bool JeandleAbstractInterpreter::emit_receiver_devirtualized_invoke(
     RETURN_ON_JEANDLE_ERROR(false);
     _ir_builder.CreateBr(merge_block);
 
+    // A throttled bimorphic site keeps both direct paths and adds a dynamic
+    // fallback instead of repeatedly deoptimizing.
     llvm::InvokeInst* invoke_miss = nullptr;
     llvm::BasicBlock* normal_dest_miss = nullptr;
     if (!devirtualization.deoptimize_on_miss) {
