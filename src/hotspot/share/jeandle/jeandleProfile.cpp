@@ -168,68 +168,9 @@ uint JeandleProfile::switch_case_count_at(int bci, int index) const {
   return multi_branch->count_at(index);
 }
 
-JeandleProfile::ReceiverProfile JeandleProfile::monomorphic_receiver_at(int bci) const {
-  ReceiverProfile result = {nullptr, 0, 0, false};
-  if (_method == nullptr || !is_mature()) {
-    return result;
-  }
-
-  ciCallProfile profile = _method->call_profile_at_bci(bci);
-  if (profile.morphism() != 1 || !profile.has_receiver(0) || profile.receiver_count(0) <= 0) {
-    return result;
-  }
-
-  ciKlass* receiver = profile.receiver(0);
-  if (receiver == nullptr || !receiver->is_loaded()) {
-    return result;
-  }
-
-  uint receiver_count = (uint) profile.receiver_count(0);
-  uint site_count = profile.count() > 0 ? (uint) profile.count() : receiver_count;
-  result.receiver_klass = receiver;
-  result.receiver_count = receiver_count;
-  result.site_count = site_count;
-  result.valid = true;
-  return result;
-}
-
-JeandleProfile::BimorphicReceiverProfile JeandleProfile::bimorphic_receiver_at(int bci) const {
-  BimorphicReceiverProfile result = {nullptr, nullptr, 0, 0, 0, false};
-  if (_method == nullptr || !is_mature()) {
-    return result;
-  }
-
-  ciCallProfile profile = _method->call_profile_at_bci(bci);
-  if (profile.morphism() != 2 || !profile.has_receiver(0) || !profile.has_receiver(1)) {
-    return result;
-  }
-
-  ciKlass* recv0 = profile.receiver(0);
-  ciKlass* recv1 = profile.receiver(1);
-  if (recv0 == nullptr || !recv0->is_loaded() ||
-      recv1 == nullptr || !recv1->is_loaded()) {
-    return result;
-  }
-
-  uint count0 = (uint) profile.receiver_count(0);
-  uint count1 = (uint) profile.receiver_count(1);
-  if (count0 <= 0 || count1 <= 0) {
-    return result;
-  }
-
-  uint site_count = profile.count() > 0 ? (uint) profile.count() : (count0 + count1);
-  result.receiver0 = recv0;
-  result.receiver1 = recv1;
-  result.count0 = count0;
-  result.count1 = count1;
-  result.site_count = site_count;
-  result.valid = true;
-  return result;
-}
-
-JeandleProfile::ReceiverProfile JeandleProfile::major_receiver_at(int bci) const {
-  ReceiverProfile result = {nullptr, 0, 0, false};
-  if (_method == nullptr || !is_mature()) {
+JeandleProfile::ReceiverProfile JeandleProfile::receiver_at(int bci) const {
+  ReceiverProfile result = {0, nullptr, nullptr, 0, 0, 0, false, false};
+  if (_method == nullptr || !UseTypeProfile || !is_mature()) {
     return result;
   }
 
@@ -238,20 +179,33 @@ JeandleProfile::ReceiverProfile JeandleProfile::major_receiver_at(int bci) const
     return result;
   }
 
-  ciKlass* receiver = profile.receiver(0);
-  if (receiver == nullptr || !receiver->is_loaded()) {
+  ciKlass* receiver0 = profile.receiver(0);
+  if (receiver0 == nullptr || !receiver0->is_loaded()) {
     return result;
   }
 
-  uint receiver_count = (uint) profile.receiver_count(0);
+  int count0 = profile.receiver_count(0);
+  int count1 = 0;
+  ciKlass* receiver1 = nullptr;
+  if (profile.has_receiver(1)) {
+    count1 = profile.receiver_count(1);
+    receiver1 = profile.receiver(1);
+    if (count1 <= 0 || receiver1 == nullptr || !receiver1->is_loaded()) {
+      receiver1 = nullptr;
+      count1 = 0;
+    }
+  }
+
   uint site_count = (uint) profile.count();
-  if (100.0 * (double) receiver_count < (double) TypeProfileMajorReceiverPercent * (double) site_count) {
-    return result;
-  }
-
-  result.receiver_klass = receiver;
-  result.receiver_count = receiver_count;
+  result.morphism = profile.morphism();
+  result.receiver0 = receiver0;
+  result.receiver1 = receiver1;
+  result.count0 = (uint) count0;
+  result.count1 = (uint) count1;
   result.site_count = site_count;
+  result.has_major_receiver =
+      100.0 * (double) count0 >=
+      (double) TypeProfileMajorReceiverPercent * (double) site_count;
   result.valid = true;
   return result;
 }

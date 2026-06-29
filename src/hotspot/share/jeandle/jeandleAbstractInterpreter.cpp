@@ -1929,6 +1929,274 @@ void JeandleAbstractInterpreter::table_switch() {
   attach_switch_weights(switch_inst, cur_bci);
 }
 
+JeandleAbstractInterpreter::ReceiverDevirtualization
+JeandleAbstractInterpreter::select_receiver_devirtualization(ciMethod* target,
+                                                              Bytecodes::Code bc,
+                                                              llvm::Value* receiver) {
+  ReceiverDevirtualization result = {
+      ReceiverDevirtualization::none,
+      nullptr, nullptr, nullptr, nullptr,
+      0, 0, 0, false, Deoptimization::Reason_none};
+
+  if ((bc != Bytecodes::_invokevirtual && bc != Bytecodes::_invokeinterface) ||
+      target->can_be_statically_bound() || receiver == nullptr) {
+    return result;
+  }
+
+  int bci = _bytecodes.cur_bci();
+  JeandleProfile::ReceiverProfile profile = _profile.receiver_at(bci);
+  if (!profile.valid) {
+    return result;
+  }
+
+  ciMethod* target0 = target->resolve_invoke(_method->holder(), profile.receiver0);
+  if (target0 == nullptr) {
+    return result;
+  }
+
+  result.receiver0 = profile.receiver0;
+  result.target0 = target0;
+  result.count0 = profile.count0;
+  result.site_count = profile.site_count;
+
+  if (profile.morphism == 2 && profile.receiver1 != nullptr) {
+    ciMethod* target1 = target->resolve_invoke(_method->holder(), profile.receiver1);
+    if (target1 != nullptr) {
+      result.kind = ReceiverDevirtualization::bimorphic;
+      result.receiver1 = profile.receiver1;
+      result.target1 = target1;
+      result.count1 = profile.count1;
+      result.miss_reason = Deoptimization::Reason_bimorphic;
+      result.deoptimize_on_miss =
+          _profile.should_speculate_receiver(bci, result.miss_reason);
+      return result;
+    }
+
+    // C2 still predicts receiver0 when the second target cannot be used, with
+    // a regular virtual call on the miss path.
+    result.kind = ReceiverDevirtualization::monomorphic;
+    return result;
+  }
+
+  if (profile.morphism == 1) {
+    result.kind = ReceiverDevirtualization::monomorphic;
+    result.miss_reason = Deoptimization::Reason_class_check;
+    result.deoptimize_on_miss =
+        _profile.should_speculate_receiver(bci, result.miss_reason);
+    return result;
+  }
+
+  if (profile.has_major_receiver) {
+    result.kind = ReceiverDevirtualization::major_receiver;
+  }
+  return result;
+}
+
+void JeandleAbstractInterpreter::pop_invoke_arguments(
+    ciSignature* method_signature,
+    int has_receiver,
+    llvm::SmallVectorImpl<llvm::Value*>& args,
+    llvm::SmallVectorImpl<llvm::Type*>& args_type) {
+  const int arg_size = method_signature->count() + has_receiver;
+  args.resize(arg_size);
+  args_type.resize(arg_size);
+  for (int i = method_signature->count() - 1; i >= 0; --i) {
+    BasicType type = method_signature->type_at(i)->basic_type();
+    args[i + has_receiver] = _jvm->pop(type);
+    args_type[i + has_receiver] = JeandleType::java2llvm(type, *_context);
+  }
+  if (has_receiver) {
+    args[0] = _jvm->pop(BasicType::T_OBJECT);
+    args_type[0] = JeandleType::java2llvm(BasicType::T_OBJECT, *_context);
+  }
+}
+
+bool JeandleAbstractInterpreter::emit_receiver_devirtualized_invoke(
+    const ReceiverDevirtualization& devirtualization,
+    ciMethod* target,
+    llvm::Value* receiver,
+    ciSignature* method_signature,
+    int has_receiver,
+    bool is_method_handle_invoke) {
+  if (!devirtualization.is_valid()) {
+    return false;
+  }
+
+  int bci = _bytecodes.cur_bci();
+  BasicType return_type = method_signature->return_type()->basic_type();
+  address opt_virtual_stub = SharedRuntime::get_resolve_opt_virtual_call_stub();
+
+  if (devirtualization.kind == ReceiverDevirtualization::monomorphic &&
+      devirtualization.deoptimize_on_miss) {
+    JeandleVMState* deopt_state = _jvm->copy();
+    llvm::Value* klass_match = emit_klass_check(receiver, devirtualization.receiver0);
+    emit_profile_uncommon_trap_guard(klass_match,
+                                     "profile_receiver",
+                                     bci,
+                                     devirtualization.count0,
+                                     1,
+                                     devirtualization.miss_reason,
+                                     Deoptimization::Action_maybe_recompile,
+                                     deopt_state,
+                                     bci);
+
+    llvm::SmallVector<llvm::Value*> args;
+    llvm::SmallVector<llvm::Type*> args_type;
+    pop_invoke_arguments(method_signature, has_receiver, args, args_type);
+    llvm::InvokeInst* invoke = emit_invoke(devirtualization.target0,
+                                           JeandleCompiledCall::STATIC_CALL,
+                                           opt_virtual_stub,
+                                           args, args_type,
+                                           method_signature, bci,
+                                           is_method_handle_invoke);
+    RETURN_ON_JEANDLE_ERROR(false);
+    if (return_type != BasicType::T_VOID) {
+      _jvm->push(return_type, invoke);
+    }
+    return true;
+  }
+
+  if (devirtualization.kind == ReceiverDevirtualization::bimorphic) {
+    JeandleVMState* deopt_state = devirtualization.deoptimize_on_miss ? _jvm->copy() : nullptr;
+    llvm::SmallVector<llvm::Value*> args;
+    llvm::SmallVector<llvm::Type*> args_type;
+    pop_invoke_arguments(method_signature, has_receiver, args, args_type);
+
+    uint remaining_after_first = devirtualization.site_count > devirtualization.count0
+        ? devirtualization.site_count - devirtualization.count0
+        : devirtualization.count1 + 1;
+    llvm::Value* klass_match0 = emit_klass_check(receiver, devirtualization.receiver0);
+    llvm::BasicBlock* miss_block0 = nullptr;
+    emit_profile_guard(klass_match0, "profile_receiver_0", bci,
+                       devirtualization.count0, remaining_after_first, &miss_block0);
+
+    llvm::BasicBlock* normal_dest0 = nullptr;
+    llvm::InvokeInst* invoke0 = emit_invoke(devirtualization.target0,
+                                            JeandleCompiledCall::STATIC_CALL,
+                                            opt_virtual_stub,
+                                            args, args_type,
+                                            method_signature, bci,
+                                            is_method_handle_invoke, &normal_dest0);
+    RETURN_ON_JEANDLE_ERROR(false);
+
+    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(
+        *_context, "bci_" + std::to_string(bci) + "_bimorphic_merge", _llvm_func);
+    _ir_builder.CreateBr(merge_block);
+
+    _ir_builder.SetInsertPoint(miss_block0);
+    llvm::Value* klass_match1 = emit_klass_check(receiver, devirtualization.receiver1);
+    llvm::BasicBlock* miss_block1 = nullptr;
+    uint remaining_after_second =
+        devirtualization.site_count > devirtualization.count0 + devirtualization.count1
+            ? devirtualization.site_count - devirtualization.count0 - devirtualization.count1
+            : 1;
+    emit_profile_guard(klass_match1, "profile_receiver_1", bci,
+                       devirtualization.count1, remaining_after_second, &miss_block1);
+
+    if (devirtualization.deoptimize_on_miss) {
+      uncommon_trap(devirtualization.miss_reason,
+                    Deoptimization::Action_maybe_recompile,
+                    miss_block1, deopt_state, bci);
+    }
+
+    llvm::BasicBlock* normal_dest1 = nullptr;
+    llvm::InvokeInst* invoke1 = emit_invoke(devirtualization.target1,
+                                            JeandleCompiledCall::STATIC_CALL,
+                                            opt_virtual_stub,
+                                            args, args_type,
+                                            method_signature, bci,
+                                            is_method_handle_invoke, &normal_dest1);
+    RETURN_ON_JEANDLE_ERROR(false);
+    _ir_builder.CreateBr(merge_block);
+
+    llvm::InvokeInst* invoke_miss = nullptr;
+    llvm::BasicBlock* normal_dest_miss = nullptr;
+    if (!devirtualization.deoptimize_on_miss) {
+      _ir_builder.SetInsertPoint(miss_block1);
+      _block->set_tail_llvm_block(miss_block1);
+      invoke_miss = emit_invoke(target,
+                                JeandleCompiledCall::DYNAMIC_CALL,
+                                SharedRuntime::get_resolve_virtual_call_stub(),
+                                args, args_type,
+                                method_signature, bci,
+                                is_method_handle_invoke, &normal_dest_miss);
+      RETURN_ON_JEANDLE_ERROR(false);
+      _ir_builder.CreateBr(merge_block);
+    }
+
+    _ir_builder.SetInsertPoint(merge_block);
+    _block->set_tail_llvm_block(merge_block);
+    if (return_type != BasicType::T_VOID) {
+      llvm::PHINode* phi = _ir_builder.CreatePHI(
+          JeandleType::java2llvm(return_type, *_context),
+          devirtualization.deoptimize_on_miss ? 2 : 3);
+      phi->addIncoming(invoke0, normal_dest0);
+      phi->addIncoming(invoke1, normal_dest1);
+      if (invoke_miss != nullptr) {
+        phi->addIncoming(invoke_miss, normal_dest_miss);
+      }
+      _jvm->push(return_type, phi);
+    }
+    return true;
+  }
+
+  // Major receivers and monomorphic predictions whose trap was throttled use
+  // the same shape: one direct fast path and a regular virtual miss path.
+  llvm::SmallVector<llvm::Value*> args;
+  llvm::SmallVector<llvm::Type*> args_type;
+  pop_invoke_arguments(method_signature, has_receiver, args, args_type);
+
+  uint miss_count = devirtualization.site_count > devirtualization.count0
+      ? devirtualization.site_count - devirtualization.count0
+      : 1;
+  const char* guard_name = devirtualization.kind == ReceiverDevirtualization::major_receiver
+      ? "profile_receiver_major"
+      : "profile_receiver";
+  const char* merge_name = devirtualization.kind == ReceiverDevirtualization::major_receiver
+      ? "_major_receiver_merge"
+      : "_receiver_merge";
+  llvm::Value* klass_match = emit_klass_check(receiver, devirtualization.receiver0);
+  llvm::BasicBlock* miss_block = nullptr;
+  emit_profile_guard(klass_match, guard_name, bci,
+                     devirtualization.count0, miss_count, &miss_block);
+
+  llvm::BasicBlock* normal_dest_hit = nullptr;
+  llvm::InvokeInst* invoke_hit = emit_invoke(devirtualization.target0,
+                                             JeandleCompiledCall::STATIC_CALL,
+                                             opt_virtual_stub,
+                                             args, args_type,
+                                             method_signature, bci,
+                                             is_method_handle_invoke, &normal_dest_hit);
+  RETURN_ON_JEANDLE_ERROR(false);
+
+  llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(
+      *_context, "bci_" + std::to_string(bci) + merge_name, _llvm_func);
+  _ir_builder.CreateBr(merge_block);
+
+  _ir_builder.SetInsertPoint(miss_block);
+  _block->set_tail_llvm_block(miss_block);
+  llvm::BasicBlock* normal_dest_miss = nullptr;
+  llvm::InvokeInst* invoke_miss = emit_invoke(target,
+                                              JeandleCompiledCall::DYNAMIC_CALL,
+                                              SharedRuntime::get_resolve_virtual_call_stub(),
+                                              args, args_type,
+                                              method_signature, bci,
+                                              is_method_handle_invoke, &normal_dest_miss);
+  RETURN_ON_JEANDLE_ERROR(false);
+  _ir_builder.CreateBr(merge_block);
+
+  _ir_builder.SetInsertPoint(merge_block);
+  _block->set_tail_llvm_block(merge_block);
+  if (return_type != BasicType::T_VOID) {
+    llvm::PHINode* phi = _ir_builder.CreatePHI(
+        JeandleType::java2llvm(return_type, *_context), 2);
+    phi->addIncoming(invoke_hit, normal_dest_hit);
+    phi->addIncoming(invoke_miss, normal_dest_miss);
+    _jvm->push(return_type, phi);
+  }
+  return true;
+}
+
 // Generate call instructions.
 void JeandleAbstractInterpreter::invoke() {
   bool will_link;
@@ -1988,44 +2256,49 @@ void JeandleAbstractInterpreter::invoke() {
   }
 
   // Additional receiver subtype checks for interface calls via invokespecial or invokeinterface.
-  ciKlass* receiver_constraint = nullptr;
-  if (bc == Bytecodes::_invokespecial && !target->is_object_initializer()) {
-    ciInstanceKlass* sender_klass = _method->holder();
-    if (sender_klass->is_interface()) {
-      receiver_constraint = sender_klass;
+  // Must run before try_lower_intrinsic so that intrinsics (e.g. _getClass) cannot bypass
+  // the runtime IllegalAccessError / IncompatibleClassChangeError that the JVMS requires
+  // when the receiver is not a subtype of the declaring interface.
+  {
+    ciKlass* receiver_constraint = nullptr;
+    if (bc == Bytecodes::_invokespecial && !target->is_object_initializer()) {
+      ciInstanceKlass* sender_klass = _method->holder();
+      if (sender_klass->is_interface()) {
+        receiver_constraint = sender_klass;
+      }
+    } else if (bc == Bytecodes::_invokeinterface && target->is_private()) {
+      assert(holder->is_interface(), "How did we get a non-interface method here!");
+      receiver_constraint = holder;
     }
-  } else if (bc == Bytecodes::_invokeinterface && target->is_private()) {
-    assert(holder->is_interface(), "How did we get a non-interface method here!");
-    receiver_constraint = holder;
-  }
 
-  if (receiver_constraint != nullptr) {
-    assert(receiver, "receiver must be present");
+    if (receiver_constraint != nullptr) {
+      assert(receiver, "receiver must be present");
 
-    int receiver_depth = target->arg_size() - 1; // Index of stack slots where receiver locates.
-    receiver_value = _jvm->raw_peek(receiver_depth).value();
+      int receiver_depth = target->arg_size() - 1; // Index of stack slots where receiver locates.
+      receiver_value = _jvm->raw_peek(receiver_depth).value();
 
-    Klass* receiver_constraint_klass = (Klass*)(receiver_constraint->constant_encoding());
-    llvm::PointerType* klass_type = llvm::PointerType::get(*_context, llvm::jeandle::AddrSpace::CHeapAddrSpace);
-    llvm::Value* receiver_constraint_value = _ir_builder.CreateIntToPtr(_ir_builder.getInt64((intptr_t)receiver_constraint_klass),
-                                                                        klass_type);
+      Klass* receiver_constraint_klass = (Klass*)(receiver_constraint->constant_encoding());
+      llvm::PointerType* klass_type = llvm::PointerType::get(*_context, llvm::jeandle::AddrSpace::CHeapAddrSpace);
+      llvm::Value* receiver_constraint_value = _ir_builder.CreateIntToPtr(_ir_builder.getInt64((intptr_t)receiver_constraint_klass),
+                                                                          klass_type);
 
-    llvm::CallInst* checkcast = call_java_op("jeandle.checkcast", {receiver_constraint_value, receiver_value});
+      llvm::CallInst* checkcast = call_java_op("jeandle.checkcast", {receiver_constraint_value, receiver_value});
 
-    int cur_bci = _bytecodes.cur_bci();
-    llvm::BasicBlock* checkcast_pass = llvm::BasicBlock::Create(*_context,
-                                                                "bci_" + std::to_string(cur_bci) + "_check_receiver_pass",
-                                                                _llvm_func);
-    llvm::BasicBlock* checkcast_fail = llvm::BasicBlock::Create(*_context,
-                                                                "bci_" + std::to_string(cur_bci) + "_check_receiver_fail",
-                                                                _llvm_func);
+      int cur_bci = _bytecodes.cur_bci();
+      llvm::BasicBlock* checkcast_pass = llvm::BasicBlock::Create(*_context,
+                                                                  "bci_" + std::to_string(cur_bci) + "_check_receiver_pass",
+                                                                  _llvm_func);
+      llvm::BasicBlock* checkcast_fail = llvm::BasicBlock::Create(*_context,
+                                                                  "bci_" + std::to_string(cur_bci) + "_check_receiver_fail",
+                                                                  _llvm_func);
 
-    _ir_builder.CreateCondBr(checkcast, checkcast_pass, checkcast_fail);
+      _ir_builder.CreateCondBr(checkcast, checkcast_pass, checkcast_fail);
 
-    uncommon_trap(Deoptimization::Reason_class_check, Deoptimization::Action_none, checkcast_fail);
+      uncommon_trap(Deoptimization::Reason_class_check, Deoptimization::Action_none, checkcast_fail);
 
-    _ir_builder.SetInsertPoint(checkcast_pass);
-    _block->set_tail_llvm_block(checkcast_pass);
+      _ir_builder.SetInsertPoint(checkcast_pass);
+      _block->set_tail_llvm_block(checkcast_pass);
+    }
   }
 
   // try inline callee as intrinsic
@@ -2057,371 +2330,17 @@ void JeandleAbstractInterpreter::invoke() {
     assert(method_signature == target->signature(), "method signature unmatched");
   }
 
-  // Devirtualize based on receiver profile (monomorphic or bimorphic).
-  bool monomorphic_devirt = false;
-  ciMethod* monomorphic_resolved = nullptr;
-  ciKlass* monomorphic_klass = nullptr;
-  uint monomorphic_count = 0;
-
-  bool bimorphic_devirt = false;
-  JeandleProfile::BimorphicReceiverProfile bp;
-  ciMethod* bimorphic_resolved0 = nullptr;
-  ciMethod* bimorphic_resolved1 = nullptr;
-
-  bool major_receiver_devirt = false;
-  ciMethod* major_receiver_resolved = nullptr;
-  ciKlass* major_receiver_klass = nullptr;
-  uint major_receiver_count = 0;
-  uint major_receiver_site_count = 0;
-
-  bool cha_devirt = false;
-  ciMethod* cha_resolved = nullptr;
-
-  bool interface_cha_devirt = false;
-  ciMethod* interface_cha_resolved = nullptr;
-  ciInstanceKlass* interface_cha_constraint = nullptr;
-
-  if ((bc == Bytecodes::_invokevirtual || bc == Bytecodes::_invokeinterface) &&
-      !target->can_be_statically_bound() &&
-      receiver_value != nullptr) {
-    int bci = _bytecodes.cur_bci();
-
-    // Try monomorphic first.
-    JeandleProfile::ReceiverProfile rp = _profile.monomorphic_receiver_at(bci);
-    if (rp.valid &&
-        _profile.should_speculate_receiver(bci, Deoptimization::Reason_speculate_class_check)) {
-      ciMethod* resolved = target->resolve_invoke(_method->holder(), rp.receiver_klass);
-      if (resolved != nullptr) {
-        monomorphic_devirt = true;
-        monomorphic_resolved = resolved;
-        monomorphic_klass = rp.receiver_klass;
-        monomorphic_count = rp.receiver_count;
-      }
-    }
-
-    // If not monomorphic, try bimorphic.
-    if (!monomorphic_devirt) {
-      bp = _profile.bimorphic_receiver_at(bci);
-      if (bp.valid &&
-          _profile.should_speculate_receiver(bci, Deoptimization::Reason_speculate_class_check)) {
-        bimorphic_resolved0 = target->resolve_invoke(_method->holder(), bp.receiver0);
-        bimorphic_resolved1 = target->resolve_invoke(_method->holder(), bp.receiver1);
-        if (bimorphic_resolved0 != nullptr && bimorphic_resolved1 != nullptr) {
-          bimorphic_devirt = true;
-        }
-      }
-    }
-
-    // If the call site is not strictly mono/bimorphic, C2 can still optimize
-    // a dominant receiver. Keep the miss path as a regular virtual call.
-    if (!monomorphic_devirt && !bimorphic_devirt) {
-      JeandleProfile::ReceiverProfile mp = _profile.major_receiver_at(bci);
-      if (mp.valid &&
-          _profile.should_speculate_receiver(bci, Deoptimization::Reason_speculate_class_check)) {
-        ciMethod* resolved = target->resolve_invoke(_method->holder(), mp.receiver_klass);
-        if (resolved != nullptr) {
-          major_receiver_devirt = true;
-          major_receiver_resolved = resolved;
-          major_receiver_klass = mp.receiver_klass;
-          major_receiver_count = mp.receiver_count;
-          major_receiver_site_count = mp.site_count;
-        }
-      }
-    }
-
-    if (!monomorphic_devirt && !bimorphic_devirt && !major_receiver_devirt &&
-        bc == Bytecodes::_invokevirtual) {
-      ciInstanceKlass* caller = _method->holder();
-      ciInstanceKlass* callee_holder = target->holder();
-      ciInstanceKlass* actual_recv = callee_holder;
-
-      if (callee_holder->is_initialized() && !callee_holder->is_interface()) {
-        ciMethod* cha_target = target->find_monomorphic_target(caller, callee_holder, actual_recv);
-        if (cha_target != nullptr) {
-          if (!cha_target->can_be_statically_bound(actual_recv)) {
-            ciEnv::current()->dependencies()->assert_unique_concrete_method(
-                actual_recv, cha_target, callee_holder, target);
-          }
-          cha_devirt = true;
-          cha_resolved = cha_target;
-        }
-      }
-    }
-
-    if (!monomorphic_devirt && !bimorphic_devirt && !major_receiver_devirt &&
-        !cha_devirt && bc == Bytecodes::_invokeinterface) {
-      ciInstanceKlass* declared_interface = target->holder();
-      if (declared_interface->is_loaded() && declared_interface->is_interface()) {
-        ciInstanceKlass* singleton = declared_interface->unique_implementor();
-        if (singleton != nullptr) {
-          ciMethod* cha_target = target->find_monomorphic_target(
-              _method->holder(), declared_interface, singleton);
-          if (cha_target != nullptr &&
-              cha_target->holder() != ciEnv::current()->Object_klass()) {
-            ciInstanceKlass* holder = cha_target->holder();
-            ciInstanceKlass* constraint = holder->is_subclass_of(singleton) ? holder : singleton;
-
-            ciEnv::current()->dependencies()->assert_unique_implementor(
-                declared_interface, singleton);
-            ciEnv::current()->dependencies()->assert_unique_concrete_method(
-                declared_interface, cha_target, declared_interface, target);
-
-            interface_cha_devirt = true;
-            interface_cha_resolved = cha_target;
-            interface_cha_constraint = constraint;
-          }
-        }
-      }
-    }
-  }
-
-  // Helper: pop arguments into args/args_type vectors.
-  auto pop_args = [&](llvm::SmallVector<llvm::Value*>& args,
-                      llvm::SmallVector<llvm::Type*>& args_type) {
-    const int arg_size = method_signature->count() + receiver;
-    args.resize(arg_size);
-    args_type.resize(arg_size);
-    for (int i = method_signature->count() - 1; i >= 0; --i) {
-      BasicType type = method_signature->type_at(i)->basic_type();
-      args[i + receiver] = _jvm->pop(type);
-      args_type[i + receiver] = JeandleType::java2llvm(type, *_context);
-    }
-    if (receiver) {
-      args[0] = _jvm->pop(BasicType::T_OBJECT);
-      args_type[0] = JeandleType::java2llvm(BasicType::T_OBJECT, *_context);
-    }
-  };
-
-  // Monomorphic devirtualization: single klass guard + static call.
-  if (monomorphic_devirt) {
-    int bci = _bytecodes.cur_bci();
-    BasicType return_type = method_signature->return_type()->basic_type();
-
-    llvm::Value* klass_match = emit_klass_check(receiver_value, monomorphic_klass);
-    emit_profile_uncommon_trap_guard(klass_match,
-                                     "profile_receiver",
-                                     bci,
-                                     monomorphic_count,
-                                     1,
-                                     Deoptimization::Reason_speculate_class_check,
-                                     Deoptimization::Action_maybe_recompile,
-                                     _jvm->copy(),
-                                     bci);
-
-    llvm::SmallVector<llvm::Value*> args;
-    llvm::SmallVector<llvm::Type*> args_type;
-    pop_args(args, args_type);
-
-    llvm::InvokeInst* invoke = emit_invoke(monomorphic_resolved,
-                                           JeandleCompiledCall::STATIC_CALL,
-                                           SharedRuntime::get_resolve_opt_virtual_call_stub(),
-                                           args, args_type,
-                                           method_signature, bci,
-                                           is_method_handle_invoke);
-    RETURN_VOID_ON_JEANDLE_ERROR();
-
-    if (return_type != BasicType::T_VOID) {
-      _jvm->push(return_type, invoke);
-    }
+  ReceiverDevirtualization devirtualization =
+      select_receiver_devirtualization(target, bc, receiver_value);
+  if (emit_receiver_devirtualized_invoke(devirtualization,
+                                         target,
+                                         receiver_value,
+                                         method_signature,
+                                         receiver,
+                                         is_method_handle_invoke)) {
     return;
   }
-
-  // Bimorphic devirtualization: two cascaded klass guards, each with its own
-  // static call.  If neither guard matches, deoptimize.
-  if (bimorphic_devirt) {
-    JeandleVMState* deopt_state = _jvm->copy();
-    int bci = _bytecodes.cur_bci();
-    BasicType return_type = method_signature->return_type()->basic_type();
-    address opt_virtual_stub = SharedRuntime::get_resolve_opt_virtual_call_stub();
-
-    llvm::SmallVector<llvm::Value*> args;
-    llvm::SmallVector<llvm::Type*> args_type;
-    pop_args(args, args_type);
-
-    // --- First guard: receiver0 ---
-    llvm::Value* klass_match0 = emit_klass_check(receiver_value, bp.receiver0);
-    llvm::BasicBlock* miss_block0 = nullptr;
-    emit_profile_guard(klass_match0, "profile_receiver_0", bci,
-                       bp.count0, bp.count1 + 1, &miss_block0);
-
-    llvm::BasicBlock* normal_dest0 = nullptr;
-    llvm::InvokeInst* invoke0 = emit_invoke(bimorphic_resolved0,
-                                            JeandleCompiledCall::STATIC_CALL,
-                                            opt_virtual_stub,
-                                            args, args_type,
-                                            method_signature, bci,
-                                            is_method_handle_invoke, &normal_dest0);
-    RETURN_VOID_ON_JEANDLE_ERROR();
-
-    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(*_context,
-        "bci_" + std::to_string(bci) + "_bimorphic_merge", _llvm_func);
-    _ir_builder.CreateBr(merge_block);
-
-    // --- Second guard: receiver1 (in miss_block0) ---
-    _ir_builder.SetInsertPoint(miss_block0);
-    llvm::Value* klass_match1 = emit_klass_check(receiver_value, bp.receiver1);
-
-    llvm::BasicBlock* miss_block1 = nullptr;
-    emit_profile_guard(klass_match1, "profile_receiver_1", bci,
-                       bp.count1, 1, &miss_block1);
-
-    uncommon_trap(Deoptimization::Reason_speculate_class_check,
-                  Deoptimization::Action_maybe_recompile,
-                  miss_block1, deopt_state, bci);
-
-    llvm::BasicBlock* normal_dest1 = nullptr;
-    llvm::InvokeInst* invoke1 = emit_invoke(bimorphic_resolved1,
-                                            JeandleCompiledCall::STATIC_CALL,
-                                            opt_virtual_stub,
-                                            args, args_type,
-                                            method_signature, bci,
-                                            is_method_handle_invoke, &normal_dest1);
-    RETURN_VOID_ON_JEANDLE_ERROR();
-
-    _ir_builder.CreateBr(merge_block);
-
-    // Merge: PHI for return value.
-    _ir_builder.SetInsertPoint(merge_block);
-    _block->set_tail_llvm_block(merge_block);
-
-    if (return_type != BasicType::T_VOID) {
-      llvm::PHINode* phi = _ir_builder.CreatePHI(
-          JeandleType::java2llvm(return_type, *_context), 2);
-      phi->addIncoming(invoke0, normal_dest0);
-      phi->addIncoming(invoke1, normal_dest1);
-      _jvm->push(return_type, phi);
-    }
-
-    return;
-  }
-
-  // Major-receiver devirtualization: one hot direct call plus a virtual-call
-  // fallback for the minority receivers.
-  if (major_receiver_devirt) {
-    int bci = _bytecodes.cur_bci();
-    BasicType return_type = method_signature->return_type()->basic_type();
-    uint miss_count = major_receiver_site_count > major_receiver_count
-        ? major_receiver_site_count - major_receiver_count
-        : 1;
-
-    llvm::SmallVector<llvm::Value*> args;
-    llvm::SmallVector<llvm::Type*> args_type;
-    pop_args(args, args_type);
-
-    llvm::Value* klass_match = emit_klass_check(receiver_value, major_receiver_klass);
-    llvm::BasicBlock* miss_block = nullptr;
-    emit_profile_guard(klass_match, "profile_receiver_major", bci,
-                       major_receiver_count, miss_count, &miss_block);
-
-    llvm::BasicBlock* normal_dest_hit = nullptr;
-    llvm::InvokeInst* invoke_hit = emit_invoke(major_receiver_resolved,
-                                               JeandleCompiledCall::STATIC_CALL,
-                                               SharedRuntime::get_resolve_opt_virtual_call_stub(),
-                                               args, args_type,
-                                               method_signature, bci,
-                                               is_method_handle_invoke, &normal_dest_hit);
-    RETURN_VOID_ON_JEANDLE_ERROR();
-
-    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(*_context,
-        "bci_" + std::to_string(bci) + "_major_receiver_merge", _llvm_func);
-    _ir_builder.CreateBr(merge_block);
-
-    _ir_builder.SetInsertPoint(miss_block);
-    _block->set_tail_llvm_block(miss_block);
-
-    llvm::BasicBlock* normal_dest_miss = nullptr;
-    llvm::InvokeInst* invoke_miss = emit_invoke(target,
-                                                JeandleCompiledCall::DYNAMIC_CALL,
-                                                SharedRuntime::get_resolve_virtual_call_stub(),
-                                                args, args_type,
-                                                method_signature, bci,
-                                                is_method_handle_invoke, &normal_dest_miss);
-    RETURN_VOID_ON_JEANDLE_ERROR();
-    _ir_builder.CreateBr(merge_block);
-
-    _ir_builder.SetInsertPoint(merge_block);
-    _block->set_tail_llvm_block(merge_block);
-
-    if (return_type != BasicType::T_VOID) {
-      llvm::PHINode* phi = _ir_builder.CreatePHI(
-          JeandleType::java2llvm(return_type, *_context), 2);
-      phi->addIncoming(invoke_hit, normal_dest_hit);
-      phi->addIncoming(invoke_miss, normal_dest_miss);
-      _jvm->push(return_type, phi);
-    }
-
-    return;
-  }
-
-  // Interface CHA devirtualization: guard the receiver against the unique
-  // implementor constraint, then call the unique concrete target directly.
-  if (interface_cha_devirt) {
-    JeandleVMState* deopt_state = _jvm->copy();
-    int bci = _bytecodes.cur_bci();
-    BasicType return_type = method_signature->return_type()->basic_type();
-
-    Klass* constraint = (Klass*)(interface_cha_constraint->constant_encoding());
-    llvm::PointerType* klass_type =
-        llvm::PointerType::get(*_context, llvm::jeandle::AddrSpace::CHeapAddrSpace);
-    llvm::Value* constraint_value = _ir_builder.CreateIntToPtr(
-        _ir_builder.getInt64((intptr_t)constraint), klass_type);
-    llvm::CallInst* subtype_match = call_java_op(
-        "jeandle.checkcast", {constraint_value, receiver_value});
-
-    emit_profile_uncommon_trap_guard(subtype_match,
-                                     "interface_cha",
-                                     bci,
-                                     1,
-                                     1,
-                                     Deoptimization::Reason_class_check,
-                                     Deoptimization::Action_none,
-                                     deopt_state,
-                                     bci);
-
-    llvm::SmallVector<llvm::Value*> args;
-    llvm::SmallVector<llvm::Type*> args_type;
-    pop_args(args, args_type);
-
-    llvm::InvokeInst* invoke = emit_invoke(interface_cha_resolved,
-                                           JeandleCompiledCall::STATIC_CALL,
-                                           SharedRuntime::get_resolve_opt_virtual_call_stub(),
-                                           args, args_type,
-                                           method_signature, bci,
-                                           is_method_handle_invoke);
-    RETURN_VOID_ON_JEANDLE_ERROR();
-
-    if (return_type != BasicType::T_VOID) {
-      _jvm->push(return_type, invoke);
-    }
-
-    return;
-  }
-
-  // CHA devirtualization: the declared receiver type has a single concrete
-  // target under the current class hierarchy. Dependencies invalidate this
-  // nmethod if later class loading breaks that assumption.
-  if (cha_devirt) {
-    int bci = _bytecodes.cur_bci();
-    BasicType return_type = method_signature->return_type()->basic_type();
-
-    llvm::SmallVector<llvm::Value*> args;
-    llvm::SmallVector<llvm::Type*> args_type;
-    pop_args(args, args_type);
-
-    llvm::InvokeInst* invoke = emit_invoke(cha_resolved,
-                                           JeandleCompiledCall::STATIC_CALL,
-                                           SharedRuntime::get_resolve_opt_virtual_call_stub(),
-                                           args, args_type,
-                                           method_signature, bci,
-                                           is_method_handle_invoke);
-    RETURN_VOID_ON_JEANDLE_ERROR();
-
-    if (return_type != BasicType::T_VOID) {
-      _jvm->push(return_type, invoke);
-    }
-
-    return;
-  }
+  RETURN_VOID_ON_JEANDLE_ERROR();
 
   // Decide call type and destination for the non-devirtualized path.
   JeandleCompiledCall::Type call_type = JeandleCompiledCall::NOT_A_CALL;
@@ -2467,7 +2386,7 @@ void JeandleAbstractInterpreter::invoke() {
 
   llvm::SmallVector<llvm::Value*> args;
   llvm::SmallVector<llvm::Type*> args_type;
-  pop_args(args, args_type);
+  pop_invoke_arguments(method_signature, receiver, args, args_type);
 
   BasicType return_type = method_signature->return_type()->basic_type();
   llvm::InvokeInst* invoke = emit_invoke(target, call_type, dest,

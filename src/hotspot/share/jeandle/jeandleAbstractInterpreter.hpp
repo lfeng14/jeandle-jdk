@@ -390,7 +390,43 @@ class JeandleAbstractInterpreter : public StackObj {
   void goto_bci(int bci);
   void lookup_switch();
   void table_switch();
+
+  struct ReceiverDevirtualization {
+    enum Kind {
+      none,
+      monomorphic,
+      bimorphic,
+      major_receiver
+    };
+
+    Kind kind;
+    ciKlass* receiver0;
+    ciKlass* receiver1;
+    ciMethod* target0;
+    ciMethod* target1;
+    uint count0;
+    uint count1;
+    uint site_count;
+    bool deoptimize_on_miss;
+    Deoptimization::DeoptReason miss_reason;
+
+    bool is_valid() const { return kind != none; }
+  };
+
   void invoke();
+  ReceiverDevirtualization select_receiver_devirtualization(ciMethod* target,
+                                                             Bytecodes::Code bc,
+                                                             llvm::Value* receiver);
+  bool emit_receiver_devirtualized_invoke(const ReceiverDevirtualization& devirtualization,
+                                          ciMethod* target,
+                                          llvm::Value* receiver,
+                                          ciSignature* method_signature,
+                                          int has_receiver,
+                                          bool is_method_handle_invoke);
+  void pop_invoke_arguments(ciSignature* method_signature,
+                            int has_receiver,
+                            llvm::SmallVectorImpl<llvm::Value*>& args,
+                            llvm::SmallVectorImpl<llvm::Type*>& args_type);
   bool try_lower_intrinsic(const ciMethod* target);
   void attach_profile_branch_weights(llvm::BranchInst* br, uint hot_count, uint cold_count);
   llvm::BasicBlock* emit_profile_uncommon_trap_guard(llvm::Value* hot_condition,

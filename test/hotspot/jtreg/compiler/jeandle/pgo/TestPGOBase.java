@@ -67,6 +67,24 @@
  *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleUseProfile -XX:+JeandleDumpIR
  *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::bimorphicCallTarget
  *      compiler.jeandle.pgo.TestPGOBase bimorphicDevirt
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleUseProfile -XX:+JeandleDumpIR
+ *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::majorReceiverCallTarget
+ *      compiler.jeandle.pgo.TestPGOBase majorReceiverDevirt
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleUseProfile -XX:+JeandleDumpIR
+ *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::interfaceCallTarget
+ *      compiler.jeandle.pgo.TestPGOBase interfaceReceiverDevirt
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions
+ *      -XX:+WhiteBoxAPI -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler
+ *      -XX:+JeandleUseProfile -XX:+JeandleDumpIR -XX:PerMethodTrapLimit=0
+ *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::receiverFallbackTarget
+ *      compiler.jeandle.pgo.TestPGOBase receiverFallback
+ * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *      -Xbatch -XX:-BackgroundCompilation -XX:+UseJeandleCompiler -XX:+JeandleUseProfile
+ *      -XX:-UseTypeProfile -XX:+JeandleDumpIR
+ *      -XX:CompileCommand=compileonly,compiler.jeandle.pgo.TestPGOBase::receiverTypeProfileOffTarget
+ *      compiler.jeandle.pgo.TestPGOBase receiverTypeProfileOff
  */
 
 package compiler.jeandle.pgo;
@@ -102,6 +120,10 @@ public class TestPGOBase {
             case "useInterpreterGate" -> testUseInterpreterGate();
             case "receiverDevirt" -> testReceiverDevirt();
             case "bimorphicDevirt" -> testBimorphicDevirt();
+            case "majorReceiverDevirt" -> testMajorReceiverDevirt();
+            case "interfaceReceiverDevirt" -> testInterfaceReceiverDevirt();
+            case "receiverFallback" -> testReceiverFallback();
+            case "receiverTypeProfileOff" -> testReceiverTypeProfileOff();
             default -> throw new IllegalArgumentException("unknown test: " + testName);
         }
     }
@@ -284,12 +306,12 @@ public class TestPGOBase {
                 "Should get correct result for profiled receiver");
 
         // Miss path: DerivedB receiver triggers deopt
-        int trapsBefore = WB.getMethodTrapCount(method, "speculate_class_check");
+        int trapsBefore = WB.getMethodTrapCount(method, "class_check");
         Asserts.assertEquals(virtualCallTarget(new DerivedB()), 200,
                 "Should get correct result after deopt for unprofiled receiver");
-        int trapsAfter = WB.getMethodTrapCount(method, "speculate_class_check");
+        int trapsAfter = WB.getMethodTrapCount(method, "class_check");
         Asserts.assertGTE(trapsAfter, trapsBefore + 1,
-                "unprofiled receiver should trigger speculate_class_check deopt");
+                "unprofiled receiver should trigger class_check deopt");
 
         checkReceiverDevirtIR();
     }
@@ -375,23 +397,88 @@ public class TestPGOBase {
         Asserts.assertTrue(WB.isMethodCompiled(method), "bimorphicCallTarget should compile");
 
         // Hot path: both receivers should be handled by fast paths (no deopt)
-        int trapsBefore = WB.getMethodTrapCount(method, "speculate_class_check");
+        int trapsBefore = bimorphicDeoptCount();
         Asserts.assertEquals(bimorphicCallTarget(new DerivedA()), 100,
                 "Should get correct result for first profiled receiver");
         Asserts.assertEquals(bimorphicCallTarget(new DerivedB()), 200,
                 "Should get correct result for second profiled receiver");
-        int trapsAfter = WB.getMethodTrapCount(method, "speculate_class_check");
+        int trapsAfter = bimorphicDeoptCount();
         Asserts.assertEquals(trapsAfter, trapsBefore,
                 "profiled receivers should not trigger deopt");
 
         // Miss path: unprofiled receiver triggers deopt
         Asserts.assertEquals(bimorphicCallTarget(new Base()), 42,
                 "Should get correct result after deopt for unprofiled receiver");
-        int trapsAfterMiss = WB.getMethodTrapCount(method, "speculate_class_check");
+        int trapsAfterMiss = bimorphicDeoptCount();
         Asserts.assertGTE(trapsAfterMiss, trapsBefore + 1,
-                "unprofiled receiver should trigger speculate_class_check deopt");
+                "unprofiled receiver should trigger bimorphic deopt");
 
         checkBimorphicDevirtIR();
+    }
+
+    private static void testMajorReceiverDevirt() throws Exception {
+        for (int i = 0; i < WARMUP; i++) {
+            Base receiver = switch (i % 40) {
+                case 38 -> new DerivedB();
+                case 39 -> new DerivedC();
+                default -> new DerivedA();
+            };
+            Asserts.assertEquals(majorReceiverCallTarget(receiver), receiver.foo());
+        }
+
+        Method method = compile("majorReceiverCallTarget", Base.class);
+        Asserts.assertTrue(WB.isMethodCompiled(method), "majorReceiverCallTarget should compile");
+        checkMajorReceiverIR();
+
+        int trapsBefore = WB.getMethodTrapCount(method, "class_check");
+        Asserts.assertEquals(majorReceiverCallTarget(new DerivedB()), 200);
+        Asserts.assertEquals(majorReceiverCallTarget(new DerivedC()), 300);
+        int trapsAfter = WB.getMethodTrapCount(method, "class_check");
+        Asserts.assertEquals(trapsAfter, trapsBefore,
+                "minor receivers must use the dynamic fallback without deoptimizing");
+        Asserts.assertTrue(WB.isMethodCompiled(method),
+                "major receiver fallback should keep the method compiled");
+    }
+
+    private static void testInterfaceReceiverDevirt() throws Exception {
+        for (int i = 0; i < WARMUP; i++) {
+            Asserts.assertEquals(interfaceCallTarget(new InterfaceA()), 400);
+        }
+
+        Method method = compile("interfaceCallTarget", ReceiverInterface.class);
+        int trapsBefore = WB.getMethodTrapCount(method, "class_check");
+        Asserts.assertEquals(interfaceCallTarget(new InterfaceB()), 500);
+        int trapsAfter = WB.getMethodTrapCount(method, "class_check");
+        Asserts.assertGTE(trapsAfter, trapsBefore + 1,
+                "unprofiled interface receiver should trigger class_check deopt");
+        checkInterfaceReceiverIR();
+    }
+
+    private static void testReceiverFallback() throws Exception {
+        for (int i = 0; i < WARMUP; i++) {
+            Asserts.assertEquals(receiverFallbackTarget(new DerivedA()), 100);
+        }
+
+        Method method = compile("receiverFallbackTarget", Base.class);
+        checkReceiverFallbackIR();
+        int trapsBefore = WB.getMethodTrapCount(method, "class_check");
+        Asserts.assertEquals(receiverFallbackTarget(new DerivedB()), 200);
+        int trapsAfter = WB.getMethodTrapCount(method, "class_check");
+        Asserts.assertEquals(trapsAfter, trapsBefore,
+                "a throttled class check must use the dynamic fallback");
+        Asserts.assertTrue(WB.isMethodCompiled(method),
+                "receiver fallback should keep the method compiled");
+    }
+
+    private static void testReceiverTypeProfileOff() throws Exception {
+        for (int i = 0; i < WARMUP; i++) {
+            Asserts.assertEquals(receiverTypeProfileOffTarget(new DerivedA()), 100);
+        }
+
+        compile("receiverTypeProfileOffTarget", Base.class);
+        List<String> lines = latestDumpLines("receiverTypeProfileOffTarget");
+        Asserts.assertFalse(contains(lines, "profile_receiver"),
+                "-XX:-UseTypeProfile should disable receiver-profile devirtualization");
     }
 
     private static void checkBimorphicDevirtIR() throws Exception {
@@ -410,6 +497,47 @@ public class TestPGOBase {
         check.checkNotPattern("call .*@uncommon_trap");
     }
 
+    private static void checkMajorReceiverIR() throws Exception {
+        List<String> lines = latestDumpLines("majorReceiverCallTarget");
+        Asserts.assertTrue(contains(lines, "profile_receiver_major_hit"),
+                "major receiver direct path is missing");
+        Asserts.assertTrue(contains(lines, "profile_receiver_major_miss"),
+                "major receiver dynamic fallback is missing");
+        Asserts.assertTrue(contains(lines, "major_receiver_merge"),
+                "major receiver results should merge");
+        Asserts.assertTrue(blockContains(lines, "profile_receiver_major_miss:", "invoke hotspotcc"),
+                "major receiver miss should contain a dynamic invoke");
+        Asserts.assertFalse(blockContains(lines, "profile_receiver_major_miss:",
+                        "llvm.experimental.deoptimize"),
+                "major receiver miss must not deoptimize");
+    }
+
+    private static void checkInterfaceReceiverIR() throws Exception {
+        List<String> lines = latestDumpLines("interfaceCallTarget");
+        Asserts.assertTrue(contains(lines, "profile_receiver_hit"),
+                "interface receiver direct path is missing");
+        Asserts.assertTrue(contains(lines, "profile_receiver_miss"),
+                "interface receiver guard miss is missing");
+        Asserts.assertTrue(blockContains(lines, "profile_receiver_miss:",
+                        "llvm.experimental.deoptimize"),
+                "monomorphic interface miss should deoptimize");
+    }
+
+    private static void checkReceiverFallbackIR() throws Exception {
+        List<String> lines = latestDumpLines("receiverFallbackTarget");
+        Asserts.assertTrue(contains(lines, "profile_receiver_hit"),
+                "throttled monomorphic call should retain its direct path");
+        Asserts.assertTrue(contains(lines, "profile_receiver_miss"),
+                "throttled monomorphic call should have a dynamic miss path");
+        Asserts.assertTrue(contains(lines, "receiver_merge"),
+                "direct and dynamic receiver results should merge");
+        Asserts.assertTrue(blockContains(lines, "profile_receiver_miss:", "invoke hotspotcc"),
+                "throttled monomorphic miss should contain a dynamic invoke");
+        Asserts.assertFalse(blockContains(lines, "profile_receiver_miss:",
+                        "llvm.experimental.deoptimize"),
+                "throttled monomorphic miss must not deoptimize");
+    }
+
     private static boolean contains(List<String> lines, String content) {
         for (String line : lines) {
             if (line.contains(content)) {
@@ -419,10 +547,32 @@ public class TestPGOBase {
         return false;
     }
 
+    private static int bimorphicDeoptCount() {
+        return WB.getDeoptCount("bimorphic", "maybe_recompile")
+                + WB.getDeoptCount("bimorphic_or_optimized_type_check", "maybe_recompile");
+    }
+
     private static boolean containsPattern(List<String> lines, String content) {
         Pattern pattern = Pattern.compile(content);
         for (String line : lines) {
             if (pattern.matcher(line).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean blockContains(List<String> lines, String blockMarker, String content) {
+        boolean inBlock = false;
+        for (String line : lines) {
+            if (!inBlock) {
+                inBlock = line.contains(blockMarker);
+                continue;
+            }
+            if (line.matches("[A-Za-z0-9_.$-]+:.*")) {
+                return false;
+            }
+            if (line.contains(content)) {
                 return true;
             }
         }
@@ -582,12 +732,44 @@ public class TestPGOBase {
         public int foo() { return 200; }
     }
 
+    static class DerivedC extends Base {
+        public int foo() { return 300; }
+    }
+
+    interface ReceiverInterface {
+        int foo();
+    }
+
+    static class InterfaceA implements ReceiverInterface {
+        public int foo() { return 400; }
+    }
+
+    static class InterfaceB implements ReceiverInterface {
+        public int foo() { return 500; }
+    }
+
     public static int virtualCallTarget(Base obj) {
         return obj.foo();
     }
 
     // Separate method so it gets its own MDO/bci distinct from virtualCallTarget.
     public static int bimorphicCallTarget(Base obj) {
+        return obj.foo();
+    }
+
+    public static int majorReceiverCallTarget(Base obj) {
+        return obj.foo();
+    }
+
+    public static int interfaceCallTarget(ReceiverInterface obj) {
+        return obj.foo();
+    }
+
+    public static int receiverFallbackTarget(Base obj) {
+        return obj.foo();
+    }
+
+    public static int receiverTypeProfileOffTarget(Base obj) {
         return obj.foo();
     }
 }
