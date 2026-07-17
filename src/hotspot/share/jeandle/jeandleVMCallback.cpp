@@ -23,6 +23,7 @@
 #include "llvm/IR/Jeandle/VMCallbackLog.h"
 #include "llvm/IR/Jeandle/InvokeType.h"
 #include "llvm/Transforms/Jeandle/CHADevirtualization.h"
+#include "llvm/Transforms/Jeandle/ProfileDevirtualization.h"
 
 #include "jeandle/jeandleAbstractInterpreter.hpp"
 #include "jeandle/jeandleCompilation.hpp"
@@ -31,6 +32,7 @@
 #include "jeandle/jeandleCompilation.hpp"
 #include "jeandle/jeandleCompiledCall.hpp"
 #include "jeandle/jeandleCompiledCode.hpp"
+#include "jeandle/jeandleProfile.hpp"
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "ci/ciClassList.hpp"
@@ -44,6 +46,7 @@
 #include "ci/ciInstance.hpp"
 #include "ci/ciInstanceKlass.hpp"
 #include "ci/ciObject.hpp"
+#include "code/oopRecorder.hpp"
 #include "logging/log.hpp"
 #include "oops/fieldInfo.inline.hpp"
 #include "oops/fieldStreams.inline.hpp"
@@ -257,6 +260,11 @@ uintptr_t jeandle_get_oop_klass(int oop_id) {
 ciMethod* jeandle_callback_method(uintptr_t method) {
   assert(method != 0, "callback method pointer must not be null");
   return (ciMethod*)method;
+}
+
+std::string jeandle_get_java_method_name(uintptr_t method) {
+  return JeandleFuncSig::method_name_with_signature(
+      jeandle_callback_method(method));
 }
 
 JeandleInlineReason jeandle_inline_reason_from_llvm(int reason) {
@@ -494,6 +502,65 @@ std::string jeandle_get_cha_opt_info(uintptr_t caller_ptr, uintptr_t callee_ptr,
   return "";
 }
 
+static void record_profile_receiver(ciKlass* receiver) {
+  assert(receiver != nullptr, "profile receiver must be present");
+  ciEnv* env = ciEnv::current();
+  assert(env != nullptr && env->oop_recorder() != nullptr,
+         "profile devirtualization must run in an active compilation");
+  // LLVM embeds the Klass* value in the exact-receiver guard. Recording it in
+  // the nmethod metadata table lets class unloading discover the dependency
+  // and invalidate the nmethod before that address can be reused.
+  env->oop_recorder()->find_index(receiver->constant_encoding());
+}
+
+std::string jeandle_get_profile_devirt_info(uintptr_t caller_ptr,
+                                            uintptr_t callee_ptr,
+                                            uintptr_t holder_ptr, int bci,
+                                            int bytecode) {
+  if (caller_ptr == 0 || callee_ptr == 0 || holder_ptr == 0 || bci < 0) {
+    return "";
+  }
+
+  ciMethod* caller = reinterpret_cast<ciMethod*>(caller_ptr);
+  ciMethod* callee = reinterpret_cast<ciMethod*>(callee_ptr);
+  ciInstanceKlass* holder = reinterpret_cast<ciInstanceKlass*>(holder_ptr);
+
+  if (bytecode != llvm::jeandle::InvokeVirtual &&
+      bytecode != llvm::jeandle::InvokeInterface) {
+    return "";
+  }
+
+  JeandleProfileDevirtualizationInfo opt_info =
+      JeandleProfile(caller).devirtualization_at(callee, holder, bci);
+  if (!opt_info.is_valid()) {
+    return "";
+  }
+
+  record_profile_receiver(opt_info.receiver);
+  if (opt_info.receiver2 != nullptr) {
+    record_profile_receiver(opt_info.receiver2);
+  }
+
+  llvm::jeandle::ProfileDevirtInfo encoded_info;
+  encoded_info.ReceiverKlass = reinterpret_cast<uintptr_t>(
+      opt_info.receiver->constant_encoding());
+  encoded_info.TargetMethod = reinterpret_cast<uintptr_t>(opt_info.target);
+  encoded_info.Count = static_cast<uint64_t>(opt_info.receiver_count);
+  encoded_info.TotalCount = static_cast<uint64_t>(opt_info.total_count);
+  encoded_info.DeoptReason =
+      static_cast<llvm::jeandle::Deoptimization::DeoptReason>(
+          opt_info.deopt_reason);
+  encoded_info.DeoptimizeOnMiss = opt_info.deoptimize_on_miss;
+  encoded_info.ReceiverKlass2 =
+      !opt_info.is_bimorphic()
+          ? 0
+          : reinterpret_cast<uintptr_t>(
+                opt_info.receiver2->constant_encoding());
+  encoded_info.TargetMethod2 = reinterpret_cast<uintptr_t>(opt_info.target2);
+  encoded_info.Count2 = static_cast<uint64_t>(opt_info.receiver_count2);
+  return encoded_info.encode();
+}
+
 } // anonymous namespace
 
 void register_jeandle_vm_callbacks() {
@@ -508,12 +575,14 @@ void register_jeandle_vm_callbacks() {
   callbacks.GetConstantFieldInfo = &jeandle_get_constant_field_info;
   callbacks.GetOopHandleName = &jeandle_get_oop_handle_name;
   callbacks.GetOopKlass = &jeandle_get_oop_klass;
+  callbacks.GetJavaMethodName = &jeandle_get_java_method_name;
   callbacks.GetInlineCalleeIR = &jeandle_get_inline_callee_ir;
   callbacks.GetNewStatepointID = &jeandle_get_new_statepoint_id;
   callbacks.IsOkToInline = &jeandle_is_ok_to_inline;
   callbacks.RecordInlineResult = &jeandle_record_inline_result;
   callbacks.RecordInliningComplete = &jeandle_record_inlining_complete;
   callbacks.GetCHAOptInfo = &jeandle_get_cha_opt_info;
+  callbacks.GetProfileDevirtInfo = &jeandle_get_profile_devirt_info;
   callbacks.UpdateToStaticOptVirtualCall = &update_to_static_opt_virtual_call;
   llvm::jeandle::registerVMCallbacks(callbacks);
 

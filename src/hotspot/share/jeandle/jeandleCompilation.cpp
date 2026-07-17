@@ -1196,6 +1196,8 @@ void JeandleCompilation::print_inline_tree(outputStream* out) const {
   print_inline_tree_method(out, _inline_tree_root->method());
   out->cr();
   print_inline_tree_impl(out, _inline_tree_root, -1, "");
+  out->print_cr("Jeandle inline summary: nodes=%d, bytecodes=%u",
+                _inline_tree_root->count(), _inline_tree_root->count_inline_bcs());
 }
 
 void JeandleCompilation::dump_inline_data(outputStream* out) {
