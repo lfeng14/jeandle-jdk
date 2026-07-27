@@ -28,6 +28,27 @@
 #include "ci/ciMethod.hpp"
 #include "ci/ciMethodData.hpp"
 #include "memory/allocation.hpp"
+#include "runtime/deoptimization.hpp"
+
+#include <cstdint>
+
+class ciInstanceKlass;
+class ciKlass;
+
+struct JeandleProfileDevirtualizationInfo {
+  ciKlass* receiver = nullptr;
+  ciMethod* target = nullptr;
+  int64_t receiver_count = 0;
+  int64_t total_count = 0;
+  Deoptimization::DeoptReason deopt_reason = Deoptimization::Reason_none;
+  bool deoptimize_on_miss = false;
+  ciKlass* receiver2 = nullptr;
+  ciMethod* target2 = nullptr;
+  int64_t receiver_count2 = 0;
+
+  bool is_valid() const { return receiver != nullptr && target != nullptr; }
+  bool is_bimorphic() const { return receiver2 != nullptr; }
+};
 
 // Read-only view of a method's MDO for the Jeandle JIT. Callers must treat
 // has_profile()==false as "emit the conservative shape", never as an error --
@@ -44,6 +65,15 @@ class JeandleProfile : public StackObj {
   // True when the MDO has enough samples to trust for speculation. Speculative
   // transforms (unstable-if prune, guarded devirt) must gate on this.
   bool is_mature() const;
+
+  bool has_trap_at(int bci, Deoptimization::DeoptReason reason) const;
+  bool has_too_many_traps(Deoptimization::DeoptReason reason) const;
+  bool has_too_many_recompiles(int bci, Deoptimization::DeoptReason reason) const;
+
+  // Single JDK-side entry point for receiver profile maturity, morphism,
+  // target resolution, and speculative trap gating.
+  JeandleProfileDevirtualizationInfo devirtualization_at(
+      ciMethod* callee, ciInstanceKlass* holder, int bci) const;
 
   struct BranchCounts {
     uint taken;

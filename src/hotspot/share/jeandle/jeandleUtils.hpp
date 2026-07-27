@@ -40,9 +40,16 @@ class SubtargetFeatures;
 class JeandleFuncSig : public AllStatic {
  public:
   // Create a llvm function according to the Java method.
-  static llvm::Function* create_llvm_func(ciMethod* method, llvm::Module& target_module, bool is_osr_entry);
+  static llvm::Function* create_llvm_func(ciMethod* method, llvm::Module& target_module, int entry_bci);
   static std::string method_name(ciMethod* method);
-  static std::string method_name_with_signature(ciMethod* method, bool is_osr_entry = false);
+  // Returns the unique LLVM symbol for a Java method. The symbol includes the
+  // ciMethod identity because class/method/signature alone omits ClassLoader.
+  // TODO: Model Java method identity (name, ciMethod and function kind) in
+  // attributes and use it for lookup instead of encoding identity in symbols.
+  static std::string method_name_with_signature(ciMethod* method);
+  // OSR and normal entries for one Java method have different LLVM signatures
+  // and must therefore use different symbols.
+  static std::string osr_method_name_with_signature(ciMethod* method, int entry_bci);
   static void setup_description(llvm::Function* func, ciMethod* method, bool is_stub = false);
 };
 

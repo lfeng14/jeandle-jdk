@@ -141,7 +141,7 @@ declare hotspotcc ptr addrspace(1) @jeandle.decode_heap_oop(ptr addrspace(3))
 declare hotspotcc ptr addrspace(3) @jeandle.encode_heap_oop(ptr addrspace(1))
 
 ; Load klass pointer from oop
-define hotspotcc ptr addrspace(0) @jeandle.load_klass(ptr addrspace(1) nocapture %oop) noinline "lower-phase"="0" #0 {
+define hotspotcc ptr addrspace(0) @jeandle.load_klass(ptr addrspace(1) nocapture %oop) noinline "lower-phase"="1" #0 {
   %klass_offset = load i32, ptr @oopDesc.klass_offset_in_bytes
   %klass_addr = getelementptr inbounds i8, ptr addrspace(1) %oop, i32 %klass_offset
 
@@ -156,6 +156,15 @@ compressed:
 uncompressed:
   %wide = load atomic ptr addrspace(0), ptr addrspace(1) %klass_addr unordered, align 8
   ret ptr addrspace(0) %wide
+}
+
+; Test whether a previously loaded dynamic Klass is exactly the expected Klass.
+; Profile devirtualization shares one phase-1 load across all exact checks for
+; a receiver. JavaType traces actual_klass back to that load for path-sensitive
+; type propagation before JavaOperationLower(1) expands both operations.
+define hotspotcc i1 @jeandle.check_exact_klass(ptr addrspace(0) nocapture %expected_klass, ptr addrspace(0) nocapture %actual_klass) noinline "lower-phase"="1" #0 {
+  %is_exact = icmp eq ptr addrspace(0) %actual_klass, %expected_klass
+  ret i1 %is_exact
 }
 
 ; This is the slow path for subtype checking when the fast path fails.
