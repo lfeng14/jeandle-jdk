@@ -261,7 +261,7 @@ JeandleCompilation::JeandleCompilation(llvm::TargetMachine* target_machine,
                                        _inline_tree_root(nullptr),
                                        _oops(),
                                        _oop_idx(0),
-                                       _code(env, method, entry_bci != InvocationEntryBci),
+                                       _code(env, method, entry_bci),
                                        _error_msg(nullptr),
                                        _has_monitors(false),
                                        _const_section_alignment(-1) {
@@ -431,8 +431,8 @@ bool JeandleCompilation::over_inlining_cutoff() const {
     return true;
   }
 
-  std::string root_name = JeandleFuncSig::method_name_with_signature(
-      _method, is_osr_compilation());
+  std::string root_name =
+      JeandleFuncSig::method_name_with_signature(_method, _entry_bci);
   llvm::Function* root = _llvm_module->getFunction(root_name);
   assert(root != nullptr, "root Java method function must exist");
 
@@ -1242,7 +1242,8 @@ void JeandleCompilation::dump_inline_callee_replay_module() {
   assert(_llvm_module != nullptr, "llvm module must exist");
   std::unique_ptr<llvm::Module> replay_module = llvm::CloneModule(*_llvm_module);
   assert(replay_module != nullptr, "failed to clone inline callee replay module");
-  std::string root_name = JeandleFuncSig::method_name_with_signature(_method, is_osr_compilation());
+  std::string root_name =
+      JeandleFuncSig::method_name_with_signature(_method, _entry_bci);
 
   // Keep only non-root Java method bodies for replay. Calls inside those methods
   // may still reference helper/runtime declarations, so non-replay functions are
