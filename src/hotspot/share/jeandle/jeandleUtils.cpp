@@ -102,11 +102,11 @@ void attach_java_klass_ret_attr(llvm::CallBase* call,
   }
 }
 
-llvm::Function* JeandleFuncSig::create_llvm_func(ciMethod* method, llvm::Module& target_module, int entry_bci) {
+llvm::Function* JeandleFuncSig::create_llvm_func(ciMethod* method,
+                                                 llvm::Module& target_module,
+                                                 int entry_bci) {
   bool is_osr_entry = entry_bci != InvocationEntryBci;
-  std::string func_name = is_osr_entry
-                              ? osr_method_name_with_signature(method, entry_bci)
-                              : method_name_with_signature(method);
+  std::string func_name = method_name_with_signature(method, entry_bci);
 
   llvm::Function* existing = target_module.getFunction(func_name);
   if (existing != nullptr) {
@@ -218,20 +218,24 @@ std::string JeandleFuncSig::method_name(ciMethod* method) {
 }
 
 std::string JeandleFuncSig::method_name_with_signature(ciMethod* method) {
-  std::string signature = std::string(method->signature()->as_symbol()->as_utf8());
+  std::string signature =
+      std::string(method->signature()->as_symbol()->as_utf8());
   // A Java class is identified by both its defining class loader and its
-  // binary name.  Dynamically generated classes from different loaders may
+  // binary name. Dynamically generated classes from different loaders may
   // therefore have the same class/method/signature spelling while denoting
-  // different Methods.  Keep the readable spelling, but append the ciMethod
+  // different Methods. Keep the readable spelling, but append the ciMethod
   // identity used by the active compilation so every Java method gets a
   // distinct LLVM symbol in the module.
   return method_name(method) + signature + ".jeandle_method_" +
          std::to_string(reinterpret_cast<uintptr_t>(method));
 }
 
-std::string JeandleFuncSig::osr_method_name_with_signature(ciMethod* method, int entry_bci) {
-  assert(entry_bci != InvocationEntryBci, "OSR entry bci required");
-  return method_name_with_signature(method) + ".osr_" + std::to_string(entry_bci);
+std::string JeandleFuncSig::method_name_with_signature(ciMethod* method,
+                                                       int entry_bci) {
+  std::string name = method_name_with_signature(method);
+  return entry_bci == InvocationEntryBci
+             ? name
+             : name + ".osr_" + std::to_string(entry_bci);
 }
 
 bool is_jeandle_compiler_thread(Thread* t) {

@@ -46,7 +46,8 @@ bool JeandleProfile::is_mature() const {
   return _mdo != nullptr && _mdo->is_mature();
 }
 
-bool JeandleProfile::has_trap_at(int bci, Deoptimization::DeoptReason reason) const {
+bool JeandleProfile::has_trap_at(
+    int bci, Deoptimization::DeoptReason reason) const {
   if (_mdo == nullptr) {
     return false;
   }
@@ -56,24 +57,31 @@ bool JeandleProfile::has_trap_at(int bci, Deoptimization::DeoptReason reason) co
   return _mdo->has_trap_at(bci, nullptr, reason) != 0;
 }
 
-bool JeandleProfile::has_too_many_traps(Deoptimization::DeoptReason reason) const {
+bool JeandleProfile::has_too_many_traps(
+    Deoptimization::DeoptReason reason) const {
   if (_mdo == nullptr || _mdo->is_empty()) {
     return false;
   }
-  return _mdo->trap_count(reason) >= Deoptimization::per_method_trap_limit(reason);
+  return _mdo->trap_count(reason) >=
+         Deoptimization::per_method_trap_limit(reason);
 }
 
-bool JeandleProfile::has_too_many_recompiles(int bci, Deoptimization::DeoptReason reason) const {
+bool JeandleProfile::has_too_many_recompiles(
+    int bci, Deoptimization::DeoptReason reason) const {
   if (_mdo == nullptr || _mdo->is_empty()) {
     return false;
   }
 
-  uint bc_cutoff = (uint) PerBytecodeRecompilationCutoff / 8;
-  uint method_cutoff = (uint) PerMethodRecompilationCutoff / 2 + 1;
-  Deoptimization::DeoptReason per_bc_reason = Deoptimization::reason_recorded_per_bytecode_if_any(reason);
-  ciMethod* trap_method = Deoptimization::reason_is_speculate(reason) ? _method : nullptr;
+  uint bc_cutoff = static_cast<uint>(PerBytecodeRecompilationCutoff) / 8;
+  uint method_cutoff =
+      static_cast<uint>(PerMethodRecompilationCutoff) / 2 + 1;
+  Deoptimization::DeoptReason per_bc_reason =
+      Deoptimization::reason_recorded_per_bytecode_if_any(reason);
+  ciMethod* trap_method =
+      Deoptimization::reason_is_speculate(reason) ? _method : nullptr;
 
-  if ((per_bc_reason == Deoptimization::Reason_none || _mdo->has_trap_at(bci, trap_method, reason) != 0) &&
+  if ((per_bc_reason == Deoptimization::Reason_none ||
+       _mdo->has_trap_at(bci, trap_method, reason) != 0) &&
       _mdo->trap_recompiled_at(bci, trap_method) &&
       _mdo->overflow_recompile_count() >= bc_cutoff) {
     return true;
@@ -111,11 +119,10 @@ static ciMethod* resolve_profile_virtual_target(ciMethod* caller,
   return callee->resolve_invoke(caller->holder(), receiver_klass);
 }
 
-JeandleProfileDevirtualizationInfo JeandleProfile::devirtualization_at(
+JeandleProfile::DevirtualizationInfo JeandleProfile::devirtualization_at(
     ciMethod* callee, ciInstanceKlass* holder, int bci) const {
   if (_method == nullptr || callee == nullptr || holder == nullptr ||
-      callee->can_be_statically_bound() || !is_mature() || !UseTypeProfile ||
-      !UseJeandleCompiler ||
+      !is_mature() || !UseTypeProfile || !UseJeandleCompiler ||
       !JeandleUseProfiledVirtualCallDevirtualization) {
     return {};
   }
@@ -129,8 +136,9 @@ JeandleProfileDevirtualizationInfo JeandleProfile::devirtualization_at(
   int64_t receiver_count = call_profile.receiver_count(0);
   int64_t total_count = call_profile.count();
   int morphism = call_profile.morphism();
-  bool has_major_receiver = 100.0 * call_profile.receiver_prob(0) >=
-                            (float)TypeProfileMajorReceiverPercent;
+  bool has_major_receiver =
+      100.0 * call_profile.receiver_prob(0) >=
+      static_cast<float>(TypeProfileMajorReceiverPercent);
   bool bimorphic_candidate = morphism == 2 && UseBimorphicInlining;
   if (morphism != 1 && !has_major_receiver && !bimorphic_candidate) {
     return {};

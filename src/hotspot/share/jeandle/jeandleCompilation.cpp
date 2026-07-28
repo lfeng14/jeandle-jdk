@@ -261,7 +261,7 @@ JeandleCompilation::JeandleCompilation(llvm::TargetMachine* target_machine,
                                        _inline_tree_root(nullptr),
                                        _oops(),
                                        _oop_idx(0),
-                                        _code(env, method, entry_bci),
+                                       _code(env, method, entry_bci),
                                        _error_msg(nullptr),
                                        _has_monitors(false),
                                        _const_section_alignment(-1) {
@@ -432,9 +432,7 @@ bool JeandleCompilation::over_inlining_cutoff() const {
   }
 
   std::string root_name =
-      _entry_bci == InvocationEntryBci
-          ? JeandleFuncSig::method_name_with_signature(_method)
-          : JeandleFuncSig::osr_method_name_with_signature(_method, _entry_bci);
+      JeandleFuncSig::method_name_with_signature(_method, _entry_bci);
   llvm::Function* root = _llvm_module->getFunction(root_name);
   assert(root != nullptr, "root Java method function must exist");
 
@@ -1198,8 +1196,6 @@ void JeandleCompilation::print_inline_tree(outputStream* out) const {
   print_inline_tree_method(out, _inline_tree_root->method());
   out->cr();
   print_inline_tree_impl(out, _inline_tree_root, -1, "");
-  out->print_cr("Jeandle inline summary: nodes=%d, bytecodes=%u",
-                _inline_tree_root->count(), _inline_tree_root->count_inline_bcs());
 }
 
 void JeandleCompilation::dump_inline_data(outputStream* out) {
@@ -1247,9 +1243,7 @@ void JeandleCompilation::dump_inline_callee_replay_module() {
   std::unique_ptr<llvm::Module> replay_module = llvm::CloneModule(*_llvm_module);
   assert(replay_module != nullptr, "failed to clone inline callee replay module");
   std::string root_name =
-      _entry_bci == InvocationEntryBci
-          ? JeandleFuncSig::method_name_with_signature(_method)
-          : JeandleFuncSig::osr_method_name_with_signature(_method, _entry_bci);
+      JeandleFuncSig::method_name_with_signature(_method, _entry_bci);
 
   // Keep only non-root Java method bodies for replay. Calls inside those methods
   // may still reference helper/runtime declarations, so non-replay functions are
