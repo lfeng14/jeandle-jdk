@@ -2235,11 +2235,9 @@ void JeandleAbstractInterpreter::invoke() {
   invoke->addFnAttr(patch_bytes_attr);
   invoke->addFnAttr(bc_attr);
   invoke->addFnAttr(declared_holder_attr);
-  if (is_opt_virtual_call) {
+  if (dest == SharedRuntime::get_resolve_opt_virtual_call_stub()) {
     assert(receiver, "opt virtual call must have a receiver");
     invoke->addParamAttr(0, llvm::Attribute::NoUndef);
-    invoke->addParamAttr(0, llvm::Attribute::get(
-        *_context, llvm::jeandle::Attribute::RuntimeLive));
   }
   if (call_type != JeandleCompiledCall::DYNAMIC_CALL) {
     invoke->addFnAttr(llvm::Attribute::get(*_context,
