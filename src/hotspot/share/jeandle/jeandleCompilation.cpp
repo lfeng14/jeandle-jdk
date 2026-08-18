@@ -224,29 +224,18 @@ class JeandleTraceTime : public TraceTime {
   ~JeandleTraceTime() = default;
 };
 
-JeandleCompilation::JeandleCompilation(llvm::TargetMachine* target_machine,
-                                       llvm::DataLayout* data_layout,
-                                       ciEnv* env,
-                                       ciMethod* method,
-                                       int entry_bci,
-                                       bool should_install,
-                                       DirectiveSet* directive,
-                                       llvm::MemoryBuffer* template_buffer) :
-                                       _target_machine(target_machine),
-                                       _data_layout(data_layout),
-                                       _env(env),
-                                       _method(method),
-                                       _name(method->get_Method()->name_and_sig_as_C_string()),
-                                       _entry_bci(entry_bci),
-                                       _context(std::make_unique<llvm::LLVMContext>()),
-                                       _replay_inline_data(nullptr),
-                                       _inline_tree_root(nullptr),
-                                       _oops(),
-                                       _oop_idx(0),
-                                       _code(env, method, entry_bci != InvocationEntryBci),
-                                       _error_msg(nullptr),
-                                       _has_monitors(false),
-                                       _const_section_alignment(-1) {
+JeandleCompilation::JeandleCompilation(llvm::TargetMachine *target_machine,
+                                       llvm::DataLayout *data_layout,
+                                       ciEnv *env, ciMethod *method,
+                                       int entry_bci, bool should_install,
+                                       DirectiveSet *directive,
+                                       llvm::MemoryBuffer *template_buffer)
+    : _target_machine(target_machine), _data_layout(data_layout), _env(env),
+      _method(method), _name(method->get_Method()->name_and_sig_as_C_string()),
+      _entry_bci(entry_bci), _context(std::make_unique<llvm::LLVMContext>()),
+      _replay_inline_data(nullptr), _inline_tree_root(nullptr), _oops(),
+      _oop_idx(0), _code(env, method, entry_bci), _error_msg(nullptr),
+      _has_monitors(false), _const_section_alignment(-1) {
 
   const char* reason = check_can_parse(method);
   if (reason != nullptr) {
@@ -286,7 +275,6 @@ JeandleCompilation::JeandleCompilation(llvm::TargetMachine* target_machine,
   if (should_install) {
     install_code();
   }
-
 }
 
 JeandleCompilation::JeandleCompilation(llvm::TargetMachine* target_machine,

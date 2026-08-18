@@ -75,7 +75,6 @@ class JeandleVMCallback : public AllStatic {
 
   // Inlining.
   static bool      get_inline_callee_ir(uintptr_t callee_method);
-  static int64_t   get_new_statepoint_id(int64_t old_statepoint_id);
   static bool      is_ok_to_inline(int scope_id, int bci, uintptr_t callee_method);
   static bool      record_inline_result(int scope_id, int bci, uintptr_t callee_method, int result);
   static bool      record_inlining_complete();
@@ -88,6 +87,13 @@ class JeandleVMCallback : public AllStatic {
   static uintptr_t get_signature_accessing_klass(uintptr_t method);
   static int64_t get_signature_arg_type(uintptr_t method, int index);
   static uintptr_t get_signature_arg_type_klass(uintptr_t method, int index);
+
+  // Profile-guided devirtualization.
+  static std::string get_profile_devirtualization_info(int64_t statepoint_id);
+
+  // Compiled call-site metadata.
+  static int64_t get_new_statepoint_id(int64_t old_statepoint_id);
+  static bool update_to_static_opt_virtual_call(int64_t id);
 
   // Replaces the now-removed ciEnv::get_instance_klass_for_klass: maps a raw
   // receiver Klass* to a ciInstanceKlass*, preserving the null-check + assert +
