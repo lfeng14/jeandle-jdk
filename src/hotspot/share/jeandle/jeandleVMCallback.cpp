@@ -24,6 +24,7 @@
 #include "llvm/IR/Jeandle/VMCallback.h"
 #include "llvm/IR/Jeandle/VMCallbackLog.h"
 #include "llvm/IR/Jeandle/InvokeType.h"
+#include "llvm/IR/Jeandle/ProfileDevirtualizationInfo.h"
 #include "llvm/Transforms/Jeandle/CHADevirtualization.h"
 
 #include "jeandle/jeandleAbstractInterpreter.hpp"
@@ -32,6 +33,7 @@
 #include "jeandle/jeandleVMCallback.hpp"
 #include "jeandle/jeandleCompiledCall.hpp"
 #include "jeandle/jeandleCompiledCode.hpp"
+#include "jeandle/jeandleProfile.hpp"
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "ci/ciClassList.hpp"
@@ -48,6 +50,8 @@
 #include "ci/ciObject.hpp"
 #include "ci/ciType.hpp"
 #include "ci/ciUtilities.inline.hpp"
+#include "code/oopRecorder.hpp"
+#include "interpreter/bytecodes.hpp"
 #include "logging/log.hpp"
 #include "oops/fieldInfo.inline.hpp"
 #include "oops/fieldStreams.inline.hpp"
@@ -810,6 +814,106 @@ bool JeandleVMCallback::update_call_site(int64_t id, int dest, bool need_attache
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Profile-guided devirtualization
+// ---------------------------------------------------------------------------
+
+static void record_profile_receiver(ciKlass* receiver) {
+  assert(receiver != nullptr, "profile receiver must be present");
+  ciEnv* env = ciEnv::current();
+  assert(env != nullptr && env->oop_recorder() != nullptr,
+         "profile devirtualization must run in an active compilation");
+  // LLVM embeds the Klass* value in the exact-receiver guard. Recording it in
+  // the nmethod metadata table lets class unloading discover the dependency
+  // and invalidate the nmethod before that address can be reused.
+  env->oop_recorder()->find_index(receiver->constant_encoding());
+}
+
+std::string JeandleVMCallback::get_profile_devirtualization_info(
+    int64_t statepoint_id) {
+  if (statepoint_id < 0) {
+    return "";
+  }
+
+  JeandleCompilation* compilation = JeandleCompilation::current();
+  assert(compilation != nullptr,
+         "profile query requires an active compilation");
+  CallSiteInfo* call_site =
+      compilation->compiled_code()->non_routine_call_site_at(
+          static_cast<uint64_t>(statepoint_id));
+  if (call_site == nullptr || !call_site->has_java_call_context()) {
+    return "";
+  }
+
+  if (call_site->bytecode() != Bytecodes::_invokevirtual &&
+      call_site->bytecode() != Bytecodes::_invokeinterface) {
+    return "";
+  }
+  assert(call_site->type() == JeandleCompiledCall::DYNAMIC_CALL,
+         "profile devirtualization requires a virtual call site");
+  assert(!call_site->callee()->can_be_statically_bound(),
+         "statically bound calls are handled by the bytecode parser");
+
+  JeandleProfile::DevirtualizationInfo opt_info =
+      JeandleProfile(call_site->caller())
+          .devirtualization_at(call_site->callee(),
+                               call_site->declared_holder(), call_site->bci());
+  if (!opt_info.is_valid()) {
+    return "";
+  }
+
+  record_profile_receiver(opt_info.receiver);
+  if (opt_info.receiver2 != nullptr) {
+    record_profile_receiver(opt_info.receiver2);
+  }
+
+  llvm::jeandle::ProfileDevirtualizationInfo encoded_info;
+  encoded_info.ReceiverKlass = reinterpret_cast<uintptr_t>(
+      opt_info.receiver->constant_encoding());
+  encoded_info.TargetMethod = reinterpret_cast<uintptr_t>(opt_info.target);
+  encoded_info.Count = static_cast<uint64_t>(opt_info.receiver_count);
+  encoded_info.TotalCount = static_cast<uint64_t>(opt_info.total_count);
+  encoded_info.DeoptReason =
+      static_cast<llvm::jeandle::Deoptimization::DeoptReason>(
+          opt_info.deopt_reason);
+  encoded_info.DeoptimizeOnMiss = opt_info.deoptimize_on_miss;
+  encoded_info.ReceiverKlass2 =
+      !opt_info.is_bimorphic()
+          ? 0
+          : reinterpret_cast<uintptr_t>(
+                opt_info.receiver2->constant_encoding());
+  encoded_info.TargetMethod2 = reinterpret_cast<uintptr_t>(opt_info.target2);
+  encoded_info.Count2 = static_cast<uint64_t>(opt_info.receiver_count2);
+  encoded_info.TargetMethodName =
+      JeandleFuncSig::method_name_with_signature(opt_info.target);
+  if (opt_info.target2 != nullptr) {
+    encoded_info.TargetMethodName2 =
+        JeandleFuncSig::method_name_with_signature(opt_info.target2);
+  }
+  return encoded_info.encode();
+}
+
+// Change a virtual callsite to opt virtual call site.
+bool JeandleVMCallback::update_to_static_opt_virtual_call(int64_t id) {
+  JeandleCompilation* compilation = JeandleCompilation::current();
+  assert(compilation != nullptr, "no active compilation");
+  JeandleCompiledCode* cc = compilation->compiled_code();
+  if (id < 0) {
+    return false;
+  }
+  CallSiteInfo* call_site =
+      cc->non_routine_call_site_at(static_cast<uint64_t>(id));
+  if (call_site == nullptr) {
+    return false;
+  }
+  // This callback updates only JDK installation metadata. LLVM owns the IR
+  // rewrite, while callback-log replay can reproduce it from the recorded
+  // return value without requiring a live CallSiteInfo.
+  call_site->set_type(JeandleCompiledCall::STATIC_CALL);
+  call_site->set_target(SharedRuntime::get_resolve_opt_virtual_call_stub());
+  return true;
+}
+
 uintptr_t JeandleVMCallback::get_signature_accessing_klass(uintptr_t method) {
   ciMethod* m = jeandle_callback_method(method);
   ciKlass* k = m->signature()->accessing_klass();
@@ -870,6 +974,10 @@ void JeandleVMCallback::register_callbacks() {
   callbacks.GetSignatureAccessingKlass = &JeandleVMCallback::get_signature_accessing_klass;
   callbacks.GetSignatureArgType = &JeandleVMCallback::get_signature_arg_type;
   callbacks.GetSignatureArgTypeKlass = &JeandleVMCallback::get_signature_arg_type_klass;
+  callbacks.GetProfileDevirtualizationInfo =
+      &JeandleVMCallback::get_profile_devirtualization_info;
+  callbacks.UpdateToStaticOptVirtualCall =
+      &JeandleVMCallback::update_to_static_opt_virtual_call;
   llvm::jeandle::registerVMCallbacks(callbacks);
 
   if (JeandleRecordVMCallbacks) {

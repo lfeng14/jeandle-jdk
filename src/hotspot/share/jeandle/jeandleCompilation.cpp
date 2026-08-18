@@ -243,7 +243,7 @@ JeandleCompilation::JeandleCompilation(llvm::TargetMachine* target_machine,
                                        _inline_tree_root(nullptr),
                                        _oops(),
                                        _oop_idx(0),
-                                       _code(env, method, entry_bci != InvocationEntryBci),
+                                       _code(env, method, entry_bci),
                                        _error_msg(nullptr),
                                        _has_monitors(false),
                                        _const_section_alignment(-1) {
