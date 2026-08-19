@@ -154,9 +154,6 @@ JeandleProfile::devirtualization_at(ciMethod *callee, ciInstanceKlass *holder,
   ciKlass *receiver2 = nullptr;
   ciMethod *target2 = nullptr;
   int64_t receiver_count2 = 0;
-  // Match ICP's profitability rule before adding a second guarded path.
-  constexpr int SecondReceiverTotalPercent = 5;
-  constexpr int SecondReceiverRemainingPercent = 30;
   if (bimorphic_candidate) {
     if (!call_profile.has_receiver(1) || call_profile.receiver_count(1) <= 0) {
       if (!has_major_receiver) {
@@ -174,15 +171,6 @@ JeandleProfile::devirtualization_at(ciMethod *callee, ciInstanceKlass *holder,
         target2 = nullptr;
       } else {
         receiver_count2 = call_profile.receiver_count(1);
-        int64_t remaining_count = total_count - receiver_count;
-        if (receiver_count2 * 100 <
-                SecondReceiverTotalPercent * total_count ||
-            receiver_count2 * 100 <
-                SecondReceiverRemainingPercent * remaining_count) {
-          receiver2 = nullptr;
-          target2 = nullptr;
-          receiver_count2 = 0;
-        }
       }
     }
   }
