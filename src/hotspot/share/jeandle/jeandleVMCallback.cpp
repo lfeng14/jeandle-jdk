@@ -867,34 +867,22 @@ JeandleVMCallback::get_profile_devirtualization_info(
     record_profile_receiver(opt_info.receiver2);
   }
 
-  uintptr_t receiver_klass = reinterpret_cast<uintptr_t>(
-      opt_info.receiver->constant_encoding());
-  uintptr_t target_method = reinterpret_cast<uintptr_t>(opt_info.target);
-  uintptr_t receiver_klass2 = 0;
-  if (opt_info.receiver2 != nullptr) {
-    receiver_klass2 = reinterpret_cast<uintptr_t>(
-        opt_info.receiver2->constant_encoding());
-  }
-  uintptr_t target_method2 = reinterpret_cast<uintptr_t>(opt_info.target2);
-  std::string target_method_name =
-      JeandleFuncSig::method_name_with_signature(opt_info.target);
-  std::string target_method_name2;
-  if (opt_info.target2 != nullptr) {
-    target_method_name2 =
-        JeandleFuncSig::method_name_with_signature(opt_info.target2);
-  }
-
-  return {receiver_klass,
-          target_method,
+  return {reinterpret_cast<uintptr_t>(opt_info.receiver->constant_encoding()),
+          reinterpret_cast<uintptr_t>(opt_info.target),
           opt_info.receiver_count,
           opt_info.total_count,
           static_cast<int>(opt_info.deopt_reason),
           opt_info.deoptimize_on_miss,
-          receiver_klass2,
-          target_method2,
+          opt_info.receiver2 == nullptr
+              ? 0
+              : reinterpret_cast<uintptr_t>(
+                    opt_info.receiver2->constant_encoding()),
+          reinterpret_cast<uintptr_t>(opt_info.target2),
           opt_info.receiver_count2,
-          target_method_name,
-          target_method_name2};
+          JeandleFuncSig::method_name_with_signature(opt_info.target),
+          opt_info.target2 == nullptr
+              ? std::string()
+              : JeandleFuncSig::method_name_with_signature(opt_info.target2)};
 }
 
 // Change a virtual callsite to opt virtual call site.
