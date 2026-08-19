@@ -207,15 +207,8 @@ JeandleProfile::devirtualization_at(ciMethod *callee, ciInstanceKlass *holder,
         deoptimize_on_miss ? "uncommon_trap" : "virtual_call");
   }
 
-  return {receiver,
-          target,
-          receiver_count,
-          total_count,
-          reason,
-          deoptimize_on_miss,
-          receiver2,
-          target2,
-          receiver_count2};
+  return {receiver, target, receiver_count, total_count, reason,
+          deoptimize_on_miss, receiver2, target2, receiver_count2};
 }
 
 // A branch/case count too large to fit in a signed int is treated as
