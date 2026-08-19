@@ -25,6 +25,7 @@
 #include "llvm/IR/Jeandle/VMCallbackLog.h"
 #include "llvm/IR/Jeandle/InvokeType.h"
 #include "llvm/Transforms/Jeandle/CHADevirtualization.h"
+#include "llvm/Transforms/Jeandle/ProfileDevirtualization.h"
 
 #include "jeandle/jeandleAbstractInterpreter.hpp"
 #include "jeandle/jeandleCompilation.hpp"
@@ -867,18 +868,24 @@ JeandleVMCallback::get_profile_devirtualization_info(
     record_profile_receiver(opt_info.receiver2);
   }
 
-  return {reinterpret_cast<uintptr_t>(opt_info.receiver->constant_encoding()),
-          reinterpret_cast<uintptr_t>(opt_info.target), opt_info.receiver_count,
-          opt_info.total_count, static_cast<int>(opt_info.deopt_reason),
-          opt_info.deoptimize_on_miss,
-          opt_info.receiver2 == nullptr ? 0 :
-              reinterpret_cast<uintptr_t>(opt_info.receiver2->constant_encoding()),
-          reinterpret_cast<uintptr_t>(opt_info.target2), opt_info.receiver_count2,
-          JeandleFuncSig::method_name_with_signature(opt_info.target),
-          opt_info.target2 == nullptr ? std::string() :
-              JeandleFuncSig::method_name_with_signature(opt_info.target2),
-          opt_info.target != nullptr && opt_info.target->is_accessor(),
-          opt_info.target2 != nullptr && opt_info.target2->is_accessor()};
+  llvm::jeandle::ProfileDevirtualizationTargetResult target{
+      reinterpret_cast<uintptr_t>(opt_info.receiver->constant_encoding()),
+      reinterpret_cast<uintptr_t>(opt_info.target), opt_info.receiver_count,
+      JeandleFuncSig::method_name_with_signature(opt_info.target)};
+  llvm::jeandle::ProfileDevirtualizationTargetResult target2;
+  if (opt_info.receiver2 != nullptr) {
+    target2 = {
+        reinterpret_cast<uintptr_t>(opt_info.receiver2->constant_encoding()),
+        reinterpret_cast<uintptr_t>(opt_info.target2), opt_info.receiver_count2,
+        JeandleFuncSig::method_name_with_signature(opt_info.target2)};
+  }
+  return {std::move(target), opt_info.total_count,
+          llvm::jeandle::ProfileDevirtualizationInfo::packDeoptInfo(
+              opt_info.target->is_accessor(),
+              opt_info.target2 != nullptr && opt_info.target2->is_accessor(),
+              static_cast<llvm::jeandle::Deoptimization::DeoptReason>(
+                  opt_info.deopt_reason)),
+          opt_info.deoptimize_on_miss, std::move(target2)};
 }
 
 // Change a virtual callsite to opt virtual call site.
