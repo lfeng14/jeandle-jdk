@@ -868,17 +868,13 @@ JeandleVMCallback::get_profile_devirtualization_info(
   }
 
   return {reinterpret_cast<uintptr_t>(opt_info.receiver->constant_encoding()),
-          reinterpret_cast<uintptr_t>(opt_info.target),
-          opt_info.receiver_count,
-          opt_info.total_count,
-          static_cast<int>(opt_info.deopt_reason),
+          reinterpret_cast<uintptr_t>(opt_info.target), opt_info.receiver_count,
+          opt_info.total_count, static_cast<int>(opt_info.deopt_reason),
           opt_info.deoptimize_on_miss,
           opt_info.receiver2 == nullptr
               ? 0
-              : reinterpret_cast<uintptr_t>(
-                    opt_info.receiver2->constant_encoding()),
-          reinterpret_cast<uintptr_t>(opt_info.target2),
-          opt_info.receiver_count2,
+              : reinterpret_cast<uintptr_t>(opt_info.receiver2->constant_encoding()),
+          reinterpret_cast<uintptr_t>(opt_info.target2), opt_info.receiver_count2,
           JeandleFuncSig::method_name_with_signature(opt_info.target),
           opt_info.target2 == nullptr
               ? std::string()
