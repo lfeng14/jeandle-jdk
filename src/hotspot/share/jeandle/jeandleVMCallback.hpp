@@ -90,7 +90,8 @@ class JeandleVMCallback : public AllStatic {
   static uintptr_t get_signature_arg_type_klass(uintptr_t method, int index);
 
   // Profile-guided devirtualization.
-  static std::string get_profile_devirtualization_info(int64_t statepoint_id);
+  static llvm::jeandle::ProfileDevirtualizationResult
+  get_profile_devirtualization_info(int64_t statepoint_id);
 
   // Compiled call-site metadata.
   static bool update_to_static_opt_virtual_call(int64_t id);

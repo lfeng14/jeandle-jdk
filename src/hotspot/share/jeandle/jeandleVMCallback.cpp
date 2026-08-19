@@ -24,7 +24,6 @@
 #include "llvm/IR/Jeandle/VMCallback.h"
 #include "llvm/IR/Jeandle/VMCallbackLog.h"
 #include "llvm/IR/Jeandle/InvokeType.h"
-#include "llvm/IR/Jeandle/ProfileDevirtualizationInfo.h"
 #include "llvm/Transforms/Jeandle/CHADevirtualization.h"
 
 #include "jeandle/jeandleAbstractInterpreter.hpp"
@@ -829,10 +828,11 @@ static void record_profile_receiver(ciKlass* receiver) {
   env->oop_recorder()->find_index(receiver->constant_encoding());
 }
 
-std::string JeandleVMCallback::get_profile_devirtualization_info(
+llvm::jeandle::ProfileDevirtualizationResult
+JeandleVMCallback::get_profile_devirtualization_info(
     int64_t statepoint_id) {
   if (statepoint_id < 0) {
-    return "";
+    return {};
   }
 
   JeandleCompilation* compilation = JeandleCompilation::current();
@@ -842,12 +842,12 @@ std::string JeandleVMCallback::get_profile_devirtualization_info(
       compilation->compiled_code()->non_routine_call_site_at(
           static_cast<uint64_t>(statepoint_id));
   if (call_site == nullptr || !call_site->has_java_call_context()) {
-    return "";
+    return {};
   }
 
   if (call_site->bytecode() != Bytecodes::_invokevirtual &&
       call_site->bytecode() != Bytecodes::_invokeinterface) {
-    return "";
+    return {};
   }
   assert(call_site->type() == JeandleCompiledCall::DYNAMIC_CALL,
          "profile devirtualization requires a virtual call site");
@@ -859,7 +859,7 @@ std::string JeandleVMCallback::get_profile_devirtualization_info(
           .devirtualization_at(call_site->callee(),
                                call_site->declared_holder(), call_site->bci());
   if (!opt_info.is_valid()) {
-    return "";
+    return {};
   }
 
   record_profile_receiver(opt_info.receiver);
@@ -867,30 +867,19 @@ std::string JeandleVMCallback::get_profile_devirtualization_info(
     record_profile_receiver(opt_info.receiver2);
   }
 
-  llvm::jeandle::ProfileDevirtualizationInfo encoded_info;
-  encoded_info.ReceiverKlass = reinterpret_cast<uintptr_t>(
-      opt_info.receiver->constant_encoding());
-  encoded_info.TargetMethod = reinterpret_cast<uintptr_t>(opt_info.target);
-  encoded_info.Count = static_cast<uint64_t>(opt_info.receiver_count);
-  encoded_info.TotalCount = static_cast<uint64_t>(opt_info.total_count);
-  encoded_info.DeoptReason =
-      static_cast<llvm::jeandle::Deoptimization::DeoptReason>(
-          opt_info.deopt_reason);
-  encoded_info.DeoptimizeOnMiss = opt_info.deoptimize_on_miss;
-  encoded_info.ReceiverKlass2 =
-      !opt_info.is_bimorphic()
+  return {
+      reinterpret_cast<uintptr_t>(opt_info.receiver->constant_encoding()),
+      reinterpret_cast<uintptr_t>(opt_info.target), opt_info.receiver_count,
+      opt_info.total_count, static_cast<int>(opt_info.deopt_reason),
+      opt_info.deoptimize_on_miss,
+      opt_info.receiver2 == nullptr
           ? 0
-          : reinterpret_cast<uintptr_t>(
-                opt_info.receiver2->constant_encoding());
-  encoded_info.TargetMethod2 = reinterpret_cast<uintptr_t>(opt_info.target2);
-  encoded_info.Count2 = static_cast<uint64_t>(opt_info.receiver_count2);
-  encoded_info.TargetMethodName =
-      JeandleFuncSig::method_name_with_signature(opt_info.target);
-  if (opt_info.target2 != nullptr) {
-    encoded_info.TargetMethodName2 =
-        JeandleFuncSig::method_name_with_signature(opt_info.target2);
-  }
-  return encoded_info.encode();
+          : reinterpret_cast<uintptr_t>(opt_info.receiver2->constant_encoding()),
+      reinterpret_cast<uintptr_t>(opt_info.target2), opt_info.receiver_count2,
+      JeandleFuncSig::method_name_with_signature(opt_info.target),
+      opt_info.target2 == nullptr
+          ? std::string()
+          : JeandleFuncSig::method_name_with_signature(opt_info.target2)};
 }
 
 // Change a virtual callsite to opt virtual call site.
