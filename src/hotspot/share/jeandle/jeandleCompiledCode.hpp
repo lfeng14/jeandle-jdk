@@ -215,7 +215,7 @@ class JeandleCompiledCode : public StackObj {
   // For compiled Java methods.
   JeandleCompiledCode(ciEnv* env,
                       ciMethod* method,
-                      int entry_bci) :
+                      bool is_osr_entry) :
                       _obj(nullptr),
                       _elf(nullptr),
                       _code_buffer("JeandleCompiledCode"),
@@ -233,8 +233,7 @@ class JeandleCompiledCode : public StackObj {
                       _env(env),
                       _method(method),
                       _routine_entry(nullptr),
-                      _func_name(JeandleFuncSig::root_method_name(
-                          _method, entry_bci != InvocationEntryBci)),
+                      _func_name(JeandleFuncSig::root_method_name(_method, is_osr_entry)),
                       _orig_pc_slot(nullptr),
                       _orig_pc_offset_in_bytes(-1),
                       _interpreter_frame_size_in_bytes(0),

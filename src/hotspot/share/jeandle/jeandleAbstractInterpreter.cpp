@@ -2152,14 +2152,12 @@ void JeandleAbstractInterpreter::invoke() {
   // Decide call type and destination.
   JeandleCompiledCall::Type call_type = JeandleCompiledCall::NOT_A_CALL;
   address dest = nullptr;
-  bool is_opt_virtual_call = false;
   switch (bc) {
     case Bytecodes::_invokevirtual:  // fall through
     case Bytecodes::_invokeinterface: {
       if (target->can_be_statically_bound()) {
         call_type = JeandleCompiledCall::STATIC_CALL;
         dest = SharedRuntime::get_resolve_opt_virtual_call_stub();
-        is_opt_virtual_call = true;
       } else {
         call_type = JeandleCompiledCall::DYNAMIC_CALL;
         dest = SharedRuntime::get_resolve_virtual_call_stub();
@@ -2179,14 +2177,12 @@ void JeandleAbstractInterpreter::invoke() {
       } else {
         assert(target->can_be_statically_bound(), "sanity");
         dest = SharedRuntime::get_resolve_opt_virtual_call_stub();
-        is_opt_virtual_call = true;
       }
       break;
     }
     case Bytecodes::_invokespecial: {
       call_type = JeandleCompiledCall::STATIC_CALL;
       dest = SharedRuntime::get_resolve_opt_virtual_call_stub();
-      is_opt_virtual_call = true;
       break;
     }
     default: ShouldNotReachHere();
@@ -2196,7 +2192,7 @@ void JeandleAbstractInterpreter::invoke() {
   assert(dest != nullptr, "legal destination");
 
   // Record this call.
-  ciInstanceKlass *declared_holder =
+  ciInstanceKlass* declared_holder =
       ciEnv::get_instance_klass_for_declared_method_holder(holder);
   uint32_t id = _compiled_code.next_statepoint_id();
   _compiled_code.push_non_routine_call_site(new CallSiteInfo(

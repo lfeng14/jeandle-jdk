@@ -64,7 +64,7 @@
           "unstable-if branch pruning")                                     \
                                                                             \
   product(bool, JeandleUseProfiledVirtualCallDevirtualization, true,        \
-          "Use receiver type profile to devirtualize "                       \
+          "Use receiver type profile to devirtualize "                      \
           "invokevirtual/invokeinterface calls in Jeandle")                 \
                                                                             \
   product(intx, JeandleNodeCountInliningCutoff, 18000,                      \
