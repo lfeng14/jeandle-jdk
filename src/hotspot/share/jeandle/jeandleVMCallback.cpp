@@ -876,7 +876,9 @@ JeandleVMCallback::get_profile_devirtualization_info(
           reinterpret_cast<uintptr_t>(opt_info.target2), opt_info.receiver_count2,
           JeandleFuncSig::method_name_with_signature(opt_info.target),
           opt_info.target2 == nullptr ? std::string() :
-              JeandleFuncSig::method_name_with_signature(opt_info.target2)};
+              JeandleFuncSig::method_name_with_signature(opt_info.target2),
+          opt_info.target != nullptr && opt_info.target->is_accessor(),
+          opt_info.target2 != nullptr && opt_info.target2->is_accessor()};
 }
 
 // Change a virtual callsite to opt virtual call site.
