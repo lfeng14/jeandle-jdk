@@ -2192,11 +2192,8 @@ void JeandleAbstractInterpreter::invoke() {
   assert(dest != nullptr, "legal destination");
 
   // Record this call.
-  ciInstanceKlass* declared_holder =
-      ciEnv::get_instance_klass_for_declared_method_holder(holder);
   uint32_t id = _compiled_code.next_statepoint_id();
-  _compiled_code.push_non_routine_call_site(
-      new CallSiteInfo(call_type, dest, is_method_handle_invoke, id));
+  _compiled_code.push_non_routine_call_site(new CallSiteInfo(call_type, dest, is_method_handle_invoke, id));
 
   // Every invoke instruction may throw exceptions, handle them here.
   DispatchedDest dispatched = dispatch_exception_for_invoke();
@@ -2223,9 +2220,9 @@ void JeandleAbstractInterpreter::invoke() {
   llvm::Attribute bc_attr = llvm::Attribute::get(*_context,
                                                  llvm::jeandle::Attribute::Bytecode,
                                                  Bytecodes::name(bc));
-  llvm::Attribute declared_holder_attr = llvm::Attribute::get(
-      *_context, llvm::jeandle::Attribute::DeclaredHolder,
-      std::to_string(reinterpret_cast<uintptr_t>(declared_holder)));
+  llvm::Attribute declared_holder_attr = llvm::Attribute::get(*_context,
+                                                 llvm::jeandle::Attribute::DeclaredHolder,
+                                                 std::to_string(reinterpret_cast<uintptr_t>(ciEnv::get_instance_klass_for_declared_method_holder(holder))));
   invoke->addFnAttr(id_attr);
   invoke->addFnAttr(patch_bytes_attr);
   invoke->addFnAttr(bc_attr);

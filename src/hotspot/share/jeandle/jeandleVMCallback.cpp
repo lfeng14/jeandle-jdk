@@ -51,7 +51,6 @@
 #include "ci/ciType.hpp"
 #include "ci/ciUtilities.inline.hpp"
 #include "code/oopRecorder.hpp"
-#include "interpreter/bytecodes.hpp"
 #include "logging/log.hpp"
 #include "oops/fieldInfo.inline.hpp"
 #include "oops/fieldStreams.inline.hpp"

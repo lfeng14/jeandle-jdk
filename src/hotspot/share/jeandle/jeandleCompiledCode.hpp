@@ -51,7 +51,6 @@
 #include "runtime/sharedRuntime.hpp"
 
 class JeandleReloc;
-class ciInstanceKlass;
 
 using llvm::jeandle::DeoptValueEncoding;
 
@@ -97,6 +96,7 @@ class CallSiteInfo : public JeandleCompilationResourceObj {
     assert(use_default_statepoint_id == (is_routine_call || is_external_call), "routine calls and external calls should use the default statepoint id");
 #endif // ASSERT
   }
+
 
   JeandleCompiledCall::Type type() const { return _type; }
   void set_type(JeandleCompiledCall::Type type) { _type = type; }
