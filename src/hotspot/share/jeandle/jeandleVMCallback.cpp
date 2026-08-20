@@ -490,6 +490,7 @@ bool JeandleVMCallback::record_inline_result(int scope_id, int bci, uintptr_t ca
     // IsOkToInline has already prepared this tree, so a successful result only
     // commits metadata in the same successful-inline order as LLVM's InlineScopes.
     comp->commit_inline_tree_for_callee(scope_id, bci, callee);
+    comp->accumulate_trap_counts_from_mdo(callee);
   } else {
     comp->record_inline_failure(scope_id,
                                 bci,

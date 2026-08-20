@@ -125,7 +125,8 @@ JeandleProfile::DevirtualizationInfo
 JeandleProfile::devirtualization_at(ciMethod *callee, ciInstanceKlass *holder,
                                     int bci) const {
   if (_method == nullptr || callee == nullptr || holder == nullptr ||
-      !is_mature() || !UseTypeProfile || !UseJeandleCompiler ||
+      callee->can_be_statically_bound() || !is_mature() ||
+      !UseTypeProfile || !UseJeandleCompiler ||
       !JeandleUseProfiledVirtualCallDevirtualization) {
     return {};
   }

@@ -288,6 +288,7 @@ class JeandleCompilation : public StackObj {
     assert(reason < MethodData::_trap_hist_limit, "trap reason overflow");
     return _trap_hist[reason];
   }
+  void accumulate_trap_counts_from_mdo(ciMethod* method);
   uint decompile_count() const { return _decompile_count; }
   void add_decompile_count(uint count) {
     uint old_count = _decompile_count;

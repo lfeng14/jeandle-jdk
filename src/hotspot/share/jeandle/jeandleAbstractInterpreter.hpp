@@ -522,14 +522,9 @@ class JeandleAbstractInterpreter : public StackObj {
   void guard_klass_being_initialized(llvm::Value* klass);
   void guard_init_thread(llvm::Value* klass);
 
-  void accumulate_trap_counts_from_mdo(ciMethod *method);
   uint trap_count(uint r) const {
     assert(r < MethodData::_trap_hist_limit, "trap reason overflow");
     return _trap_hist[r];
-  }
-  void set_trap_count(uint r, uint c) {
-    assert(r < MethodData::_trap_hist_limit, "trap reason overflow");
-    _trap_hist[r] = c;
   }
   bool too_many_traps(ciMethod *method, int bci, Deoptimization::DeoptReason reason);
   bool too_many_traps(Deoptimization::DeoptReason reason);
