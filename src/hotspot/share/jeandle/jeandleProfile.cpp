@@ -19,6 +19,7 @@
  */
 
 #include "jeandle/jeandleProfile.hpp"
+#include "jeandle/jeandleCompilation.hpp"
 #include "jeandle/jeandle_globals.hpp"
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
@@ -62,7 +63,7 @@ bool JeandleProfile::has_too_many_traps(
   if (_mdo == nullptr || _mdo->is_empty()) {
     return false;
   }
-  return _mdo->trap_count(reason) >=
+  return JeandleCompilation::current()->trap_count(reason) >=
          Deoptimization::per_method_trap_limit(reason);
 }
 
@@ -86,8 +87,9 @@ bool JeandleProfile::has_too_many_recompiles(
     return true;
   }
 
-  return _mdo->trap_count(reason) != 0 &&
-         _mdo->decompile_count() >= method_cutoff;
+  JeandleCompilation* compilation = JeandleCompilation::current();
+  return compilation->trap_count(reason) != 0 &&
+         compilation->decompile_count() >= method_cutoff;
 }
 
 static ciMethod *resolve_profile_virtual_target(ciMethod *caller,
