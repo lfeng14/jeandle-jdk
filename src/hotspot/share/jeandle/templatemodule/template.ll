@@ -195,6 +195,15 @@ uncompressed:
   ret ptr addrspace(0) %wide
 }
 
+; Test whether a previously loaded dynamic Klass is exactly the expected Klass.
+; Profile devirtualization shares one phase-1 load across all exact checks for
+; a receiver. JavaType traces actual_klass back to that load for path-sensitive
+; type propagation before JavaOperationLower(1) expands both operations.
+define hotspotcc i1 @jeandle.check_exact_klass(ptr addrspace(0) nocapture %expected_klass, ptr addrspace(0) nocapture %actual_klass) noinline "lower-phase"="1" #0 {
+  %is_exact = icmp eq ptr addrspace(0) %actual_klass, %expected_klass
+  ret i1 %is_exact
+}
+
 ; This is the slow path for subtype checking when the fast path fails.
 define hotspotcc i1 @jeandle.check_klass_subtype_slow_path(ptr addrspace(0) nocapture %sub_klass, ptr addrspace(0) nocapture %super_klass) "lower-phase"="0" #0 {
 entry:
