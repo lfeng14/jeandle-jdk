@@ -49,7 +49,7 @@ class JeandleProfile : public StackObj {
   bool has_too_many_recompiles(int bci,
                                Deoptimization::DeoptReason reason) const;
 
-public:
+ public:
   struct DevirtualizationInfo {
     ciKlass* receiver = nullptr;
     ciMethod* target = nullptr;
@@ -75,8 +75,9 @@ public:
 
   // Single JDK-side entry point for receiver profile maturity, morphism,
   // target resolution, and speculative trap gating.
-  DevirtualizationInfo
-  devirtualization_at(ciMethod *callee, ciInstanceKlass *holder, int bci) const;
+  DevirtualizationInfo devirtualization_at(ciMethod* callee,
+                                            ciInstanceKlass* holder,
+                                            int bci) const;
 
   struct BranchCounts {
     uint taken;

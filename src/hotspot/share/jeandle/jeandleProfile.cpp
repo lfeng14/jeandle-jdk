@@ -77,7 +77,7 @@ bool JeandleProfile::has_too_many_recompiles(
   uint method_cutoff = static_cast<uint>(PerMethodRecompilationCutoff) / 2 + 1;
   Deoptimization::DeoptReason per_bc_reason =
       Deoptimization::reason_recorded_per_bytecode_if_any(reason);
-  ciMethod *trap_method =
+  ciMethod* trap_method =
       Deoptimization::reason_is_speculate(reason) ? _method : nullptr;
 
   if ((per_bc_reason == Deoptimization::Reason_none ||
@@ -92,10 +92,10 @@ bool JeandleProfile::has_too_many_recompiles(
          compilation->decompile_count() >= method_cutoff;
 }
 
-static ciMethod *resolve_profile_virtual_target(ciMethod *caller,
-                                                ciMethod *callee,
-                                                ciInstanceKlass *holder,
-                                                ciKlass *receiver) {
+static ciMethod* resolve_profile_virtual_target(ciMethod* caller,
+                                                ciMethod* callee,
+                                                ciInstanceKlass* holder,
+                                                ciKlass* receiver) {
   if (receiver == nullptr) {
     return nullptr;
   }
@@ -112,7 +112,7 @@ static ciMethod *resolve_profile_virtual_target(ciMethod *caller,
     return nullptr;
   }
 
-  ciInstanceKlass *receiver_klass = receiver->as_instance_klass();
+  ciInstanceKlass* receiver_klass = receiver->as_instance_klass();
   if (!receiver_klass->is_loaded() || !receiver_klass->is_initialized() ||
       receiver_klass->is_interface() ||
       !receiver_klass->is_subtype_of(holder)) {
@@ -122,7 +122,7 @@ static ciMethod *resolve_profile_virtual_target(ciMethod *caller,
 }
 
 JeandleProfile::DevirtualizationInfo
-JeandleProfile::devirtualization_at(ciMethod *callee, ciInstanceKlass *holder,
+JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
                                     int bci) const {
   if (_method == nullptr || callee == nullptr || holder == nullptr ||
       callee->can_be_statically_bound() || !is_mature() ||
@@ -147,15 +147,15 @@ JeandleProfile::devirtualization_at(ciMethod *callee, ciInstanceKlass *holder,
     return {};
   }
 
-  ciKlass *receiver = call_profile.receiver(0);
-  ciMethod *target =
+  ciKlass* receiver = call_profile.receiver(0);
+  ciMethod* target =
       resolve_profile_virtual_target(_method, callee, holder, receiver);
   if (target == nullptr || target->is_abstract()) {
     return {};
   }
 
-  ciKlass *receiver2 = nullptr;
-  ciMethod *target2 = nullptr;
+  ciKlass* receiver2 = nullptr;
+  ciMethod* target2 = nullptr;
   int64_t receiver_count2 = 0;
   if (bimorphic_candidate) {
     if (!call_profile.has_receiver(1) || call_profile.receiver_count(1) <= 0) {
