@@ -91,7 +91,9 @@ class JeandleVMCallback : public AllStatic {
 
   // Profile-guided devirtualization.
   static llvm::jeandle::ProfileDevirtualizationResult
-  get_profile_devirtualization_info(int64_t statepoint_id);
+  get_profile_devirtualization_info(uintptr_t caller_ptr, uintptr_t callee_ptr,
+                                    uintptr_t holder_ptr, int bci,
+                                    int invoke_kind);
 
   // Compiled call-site metadata.
   static bool update_to_static_opt_virtual_call(int64_t id);

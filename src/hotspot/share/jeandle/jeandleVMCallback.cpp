@@ -831,37 +831,22 @@ static void record_profile_receiver(ciKlass* receiver) {
 
 llvm::jeandle::ProfileDevirtualizationResult
 JeandleVMCallback::get_profile_devirtualization_info(
-    int64_t statepoint_id) {
-  if (statepoint_id < 0) {
+    uintptr_t caller_ptr, uintptr_t callee_ptr, uintptr_t holder_ptr, int bci,
+    int invoke_kind) {
+  if (caller_ptr == 0 || callee_ptr == 0 || holder_ptr == 0 || bci < 0 ||
+      (invoke_kind != llvm::jeandle::InvokeVirtual &&
+       invoke_kind != llvm::jeandle::InvokeInterface)) {
     return {};
   }
 
-  JeandleCompilation* compilation = JeandleCompilation::current();
-  assert(compilation != nullptr,
-         "profile query requires an active compilation");
-  JeandleCompiledCode* cc = compilation->compiled_code();
-  if (static_cast<size_t>(statepoint_id) >=
-      cc->non_routine_call_sites().size()) {
-    return {};
-  }
-  CallSiteInfo* call_site = cc->non_routine_call_sites()[statepoint_id];
-  if (call_site == nullptr || !call_site->has_java_call_context()) {
-    return {};
-  }
-
-  if (call_site->bytecode() != Bytecodes::_invokevirtual &&
-      call_site->bytecode() != Bytecodes::_invokeinterface) {
-    return {};
-  }
-  assert(call_site->type() == JeandleCompiledCall::DYNAMIC_CALL,
-         "profile devirtualization requires a virtual call site");
-  assert(!call_site->callee()->can_be_statically_bound(),
+  ciMethod* caller = reinterpret_cast<ciMethod*>(caller_ptr);
+  ciMethod* callee = reinterpret_cast<ciMethod*>(callee_ptr);
+  ciInstanceKlass* holder = reinterpret_cast<ciInstanceKlass*>(holder_ptr);
+  assert(!callee->can_be_statically_bound(),
          "statically bound calls are handled by the bytecode parser");
 
   JeandleProfile::DevirtualizationInfo opt_info =
-      JeandleProfile(call_site->caller())
-          .devirtualization_at(call_site->callee(),
-                               call_site->declared_holder(), call_site->bci());
+      JeandleProfile(caller).devirtualization_at(callee, holder, bci);
   if (!opt_info.is_valid()) {
     return {};
   }

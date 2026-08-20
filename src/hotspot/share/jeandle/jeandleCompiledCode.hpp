@@ -83,36 +83,20 @@ class CallSiteInfo : public JeandleCompilationResourceObj {
                address target,
                bool is_method_handle_invoke = false,
                uint64_t statepoint_id = llvm::StatepointDirectives::DefaultStatepointID,
-               Method *attached_method = nullptr,
-               ciMethod* caller = nullptr,
-               ciMethod* callee = nullptr,
-               ciInstanceKlass* declared_holder = nullptr,
-               int bci = -1,
-               int bytecode = -1) :
+               Method *attached_method = nullptr) :
                _type(type),
                _target(target),
                _is_method_handle_invoke(is_method_handle_invoke),
                _attached_method(attached_method),
-               _statepoint_id(statepoint_id),
-               _caller(caller),
-               _callee(callee),
-               _declared_holder(declared_holder),
-               _bci(bci),
-               _bytecode(bytecode) {
+               _statepoint_id(statepoint_id) {
 #ifdef ASSERT
     // We don't need to assign a unique statepoint id for each routine call site, only call type and target is used.
     bool use_default_statepoint_id = (statepoint_id == llvm::StatepointDirectives::DefaultStatepointID);
     bool is_routine_call = (type == JeandleCompiledCall::ROUTINE_CALL);
     bool is_external_call = (type == JeandleCompiledCall::EXTERNAL_CALL);
     assert(use_default_statepoint_id == (is_routine_call || is_external_call), "routine calls and external calls should use the default statepoint id");
-    bool has_java_call_context = caller != nullptr;
-    assert(has_java_call_context ==
-               (callee != nullptr && declared_holder != nullptr && bci >= 0 &&
-                bytecode >= 0),
-           "Java call-site context must be complete");
 #endif // ASSERT
   }
-
 
   JeandleCompiledCall::Type type() const { return _type; }
   void set_type(JeandleCompiledCall::Type type) { _type = type; }
@@ -125,12 +109,6 @@ class CallSiteInfo : public JeandleCompilationResourceObj {
   }
   Method* attached_method() const { return _attached_method; }
   void set_attached_method(Method* method) { _attached_method = method; }
-  bool has_java_call_context() const { return _caller != nullptr; }
-  ciMethod* caller() const { return _caller; }
-  ciMethod* callee() const { return _callee; }
-  ciInstanceKlass* declared_holder() const { return _declared_holder; }
-  int bci() const { return _bci; }
-  int bytecode() const { return _bytecode; }
 
  private:
   JeandleCompiledCall::Type _type;
@@ -140,15 +118,6 @@ class CallSiteInfo : public JeandleCompilationResourceObj {
 
   // Used to distinguish each call site in stackmaps.
   uint64_t _statepoint_id;
-
-  // Profile queries use the statepoint id to recover the Java call context.
-  // Keeping this context in CallSiteInfo avoids duplicating it in VM callback
-  // arguments and remains valid when LLVM clones a call site during inlining.
-  ciMethod* _caller;
-  ciMethod* _callee;
-  ciInstanceKlass* _declared_holder;
-  int _bci;
-  int _bytecode;
 };
 
 class JeandleStackMap : public JeandleCompilationResourceObj {
@@ -282,12 +251,7 @@ class JeandleCompiledCode : public StackObj {
                                                 old_call_site->target(),
                                                 old_call_site->is_method_handle_invoke(),
                                                 new_statepoint_id,
-                                                old_call_site->attached_method(),
-                                                old_call_site->caller(),
-                                                old_call_site->callee(),
-                                                old_call_site->declared_holder(),
-                                                old_call_site->bci(),
-                                                old_call_site->bytecode()));
+                                                old_call_site->attached_method()));
     return static_cast<int64_t>(new_statepoint_id);
   }
   llvm::SmallVector<CallSiteInfo*>& non_routine_call_sites() { return _non_routine_call_sites; }

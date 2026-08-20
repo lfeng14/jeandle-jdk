@@ -2195,9 +2195,8 @@ void JeandleAbstractInterpreter::invoke() {
   ciInstanceKlass* declared_holder =
       ciEnv::get_instance_klass_for_declared_method_holder(holder);
   uint32_t id = _compiled_code.next_statepoint_id();
-  _compiled_code.push_non_routine_call_site(new CallSiteInfo(
-      call_type, dest, is_method_handle_invoke, id, nullptr, _method, target,
-      declared_holder, _bytecodes.cur_bci(), static_cast<int>(bc)));
+  _compiled_code.push_non_routine_call_site(
+      new CallSiteInfo(call_type, dest, is_method_handle_invoke, id));
 
   // Every invoke instruction may throw exceptions, handle them here.
   DispatchedDest dispatched = dispatch_exception_for_invoke();
