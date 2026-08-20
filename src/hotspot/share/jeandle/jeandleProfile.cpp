@@ -21,6 +21,7 @@
 #include "jeandle/jeandleProfile.hpp"
 #include "jeandle/jeandle_globals.hpp"
 
+#include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "ci/ciCallProfile.hpp"
 #include "ci/ciEnv.hpp"
 #include "ci/ciInstanceKlass.hpp"
@@ -28,7 +29,6 @@
 #include "ci/ciMethod.hpp"
 #include "ci/ciMethodData.hpp"
 #include "ci/ciSymbols.hpp"
-#include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "logging/log.hpp"
 #include "oops/methodData.hpp"
 #include "opto/c2_globals.hpp"

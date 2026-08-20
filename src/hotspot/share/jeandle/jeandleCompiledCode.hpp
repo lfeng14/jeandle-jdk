@@ -268,19 +268,12 @@ class JeandleCompiledCode : public StackObj {
 
   void push_non_routine_call_site(CallSiteInfo* call_site) { _non_routine_call_sites.push_back(call_site); }
   uint64_t next_statepoint_id() { return _non_routine_call_sites.size(); }
-  CallSiteInfo* non_routine_call_site_at(uint64_t statepoint_id) const {
-    if (statepoint_id >= _non_routine_call_sites.size()) {
-      return nullptr;
-    }
-    CallSiteInfo* call_site = _non_routine_call_sites[statepoint_id];
-    assert(call_site != nullptr, "non-routine call site must exist");
-    assert(call_site->statepoint_id() == statepoint_id,
-           "statepoint id must match its call-site index");
-    return call_site;
-  }
   int64_t duplicate_non_routine_call_site(uint64_t old_statepoint_id) {
-    CallSiteInfo* old_call_site = non_routine_call_site_at(old_statepoint_id);
+    assert(old_statepoint_id < _non_routine_call_sites.size(), "old statepoint id must exist");
+    CallSiteInfo* old_call_site = _non_routine_call_sites[old_statepoint_id];
     assert(old_call_site != nullptr, "non-routine call site must exist");
+    assert(old_call_site->statepoint_id() == old_statepoint_id,
+           "statepoint id must match its call-site index");
 
     // LLVM may duplicate an inlined call site. Keep the stackmap contract that
     // a non-routine statepoint id directly indexes _non_routine_call_sites.

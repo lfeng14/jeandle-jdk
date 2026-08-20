@@ -839,9 +839,12 @@ JeandleVMCallback::get_profile_devirtualization_info(
   JeandleCompilation* compilation = JeandleCompilation::current();
   assert(compilation != nullptr,
          "profile query requires an active compilation");
-  CallSiteInfo* call_site =
-      compilation->compiled_code()->non_routine_call_site_at(
-          static_cast<uint64_t>(statepoint_id));
+  JeandleCompiledCode* cc = compilation->compiled_code();
+  if (static_cast<size_t>(statepoint_id) >=
+      cc->non_routine_call_sites().size()) {
+    return {};
+  }
+  CallSiteInfo* call_site = cc->non_routine_call_sites()[statepoint_id];
   if (call_site == nullptr || !call_site->has_java_call_context()) {
     return {};
   }
@@ -896,8 +899,10 @@ bool JeandleVMCallback::update_to_static_opt_virtual_call(int64_t id) {
   if (id < 0) {
     return false;
   }
-  CallSiteInfo* call_site =
-      cc->non_routine_call_site_at(static_cast<uint64_t>(id));
+  if (static_cast<size_t>(id) >= cc->non_routine_call_sites().size()) {
+    return false;
+  }
+  CallSiteInfo* call_site = cc->non_routine_call_sites()[id];
   if (call_site == nullptr) {
     return false;
   }
