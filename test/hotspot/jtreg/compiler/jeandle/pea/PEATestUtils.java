@@ -167,24 +167,80 @@ public final class PEATestUtils {
         if (actual.equals(expected)) {
             return true;
         }
-        boolean actualRoot = actual.endsWith(".root");
-        boolean expectedRoot = expected.endsWith(".root");
-        if (actualRoot != expectedRoot) {
-            return false;
+        return stableRuntimeFunctionName(actual).equals(expected);
+    }
+
+    private static String stableRuntimeFunctionName(String function) {
+        boolean root = function.endsWith(".root");
+        String candidate = root
+                ? function.substring(0, function.length() - ".root".length())
+                : function;
+        int identitySeparator = candidate.lastIndexOf('.');
+        if (identitySeparator < 0 || identitySeparator == candidate.length() - 1) {
+            return function;
         }
-        String actualBase = actualRoot
-                ? actual.substring(0, actual.length() - ".root".length())
-                : actual;
-        String expectedBase = expectedRoot
-                ? expected.substring(0, expected.length() - ".root".length())
-                : expected;
-        String identityPrefix = expectedBase + ".";
-        if (!actualBase.startsWith(identityPrefix)) {
-            return false;
+        String stable = candidate.substring(0, identitySeparator);
+        String identity = candidate.substring(identitySeparator + 1);
+        int closeDescriptor = stable.lastIndexOf(')');
+        if (stable.lastIndexOf('(', closeDescriptor) < 0
+                || closeDescriptor == stable.length() - 1
+                || !identity.chars().allMatch(Character::isDigit)) {
+            return function;
         }
-        String identity = actualBase.substring(identityPrefix.length());
-        return !identity.isEmpty()
-                && identity.chars().allMatch(Character::isDigit);
+        return stable + (root ? ".root" : "");
+    }
+
+    // PEA assertions use stable Java method names. Remove only the numeric
+    // identity after a JVM method descriptor; ordinary LLVM .1/.2 suffixes
+    // and unrelated numeric constants remain visible to the tests.
+    private static String normalizeRuntimeFunctionSymbols(String line) {
+        StringBuilder normalized = null;
+        int copiedThrough = 0;
+        int searchFrom = 0;
+        while (true) {
+            int at = line.indexOf('@', searchFrom);
+            if (at < 0) {
+                break;
+            }
+            ParsedOperand operand;
+            try {
+                operand = parseLLVMNamedOperand(line, at);
+            } catch (IllegalArgumentException malformed) {
+                searchFrom = at + 1;
+                continue;
+            }
+            searchFrom = operand.end;
+            String stable = stableRuntimeFunctionName(operand.value);
+            if (stable.equals(operand.value)) {
+                continue;
+            }
+
+            boolean root = operand.value.endsWith(".root");
+            int stableLengthWithoutRoot = stable.length()
+                    - (root ? ".root".length() : 0);
+            int identityEnd = operand.value.length()
+                    - (root ? ".root".length() : 0);
+            String identitySuffix = operand.value.substring(
+                    stableLengthWithoutRoot, identityEnd);
+            String rawOperand = line.substring(at, operand.end);
+            int suffixAt = rawOperand.lastIndexOf(identitySuffix);
+            if (suffixAt < 0) {
+                throw new IllegalStateException(
+                        "Runtime function identity is not present in LLVM operand: "
+                                + rawOperand);
+            }
+            if (normalized == null) {
+                normalized = new StringBuilder(line.length());
+            }
+            normalized.append(line, copiedThrough, at + suffixAt)
+                    .append(rawOperand, suffixAt + identitySuffix.length(),
+                            rawOperand.length());
+            copiedThrough = operand.end;
+        }
+        if (normalized == null) {
+            return line;
+        }
+        return normalized.append(line, copiedThrough, line.length()).toString();
     }
 
     /** Exact identity for one Java method in HotSpot commands and Jeandle IR. */
@@ -2002,8 +2058,10 @@ public final class PEATestUtils {
 
         private IRBody(MethodId method, List<String> lines) {
             this.method = method;
-            this.lines = List.copyOf(lines);
-            this.text = String.join("\n", lines);
+            this.lines = lines.stream()
+                    .map(PEATestUtils::normalizeRuntimeFunctionSymbols)
+                    .toList();
+            this.text = String.join("\n", this.lines);
         }
 
         private static IRBody fromModuleLines(List<String> rawLines, MethodId method) {
@@ -2074,6 +2132,9 @@ public final class PEATestUtils {
         }
 
         private static List<String> crossProcessExactLines(List<String> sourceLines) {
+            sourceLines = sourceLines.stream()
+                    .map(PEATestUtils::normalizeRuntimeFunctionSymbols)
+                    .toList();
             LinkedHashMap<String, String> klassReplacements = new LinkedHashMap<>();
             LinkedHashMap<String, String> methodReplacements = new LinkedHashMap<>();
             for (String line : sourceLines) {
@@ -4070,6 +4131,23 @@ public final class PEATestUtils {
     }
 
     private static void assertCrossProcessNormalizerContracts() {
+        List<String> runtimeFunctionsFirst = List.of(
+                "define void @\"pkg_Test_work()V.111111.root\"() {",
+                "call void @\"pkg_Test_helper(I)V.222222\"(i32 1)",
+                "}");
+        List<String> runtimeFunctionsSecond = List.of(
+                "define void @\"pkg_Test_work()V.333333.root\"() {",
+                "call void @\"pkg_Test_helper(I)V.444444\"(i32 1)",
+                "}");
+        Asserts.assertEquals(IRBody.crossProcessExactLines(runtimeFunctionsFirst),
+                IRBody.crossProcessExactLines(runtimeFunctionsSecond),
+                "cross-process normalizer handles runtime Java method identities");
+
+        String ordinarySuffixes = "call void @ordinary.1(i32 123456)";
+        Asserts.assertEquals(normalizeRuntimeFunctionSymbols(ordinarySuffixes),
+                ordinarySuffixes,
+                "runtime symbol normalizer preserves ordinary LLVM suffixes and constants");
+
         List<String> first = List.of(
                 "%object = call \"java-klass\"=\"101010101010\" ptr "
                         + "inttoptr (i64 101010101010 to ptr)",
