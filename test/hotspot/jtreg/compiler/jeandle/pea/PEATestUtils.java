@@ -157,6 +157,36 @@ public final class PEATestUtils {
 
     private PEATestUtils() {}
 
+    // JDK-generated LLVM symbols append the ciMethod identity as a numeric
+    // suffix. Try the stable name first, then accept that runtime suffix.
+    private static boolean matchesRuntimeFunctionName(String actual,
+                                                       String expected) {
+        if (actual == null || expected == null) {
+            return false;
+        }
+        if (actual.equals(expected)) {
+            return true;
+        }
+        boolean actualRoot = actual.endsWith(".root");
+        boolean expectedRoot = expected.endsWith(".root");
+        if (actualRoot != expectedRoot) {
+            return false;
+        }
+        String actualBase = actualRoot
+                ? actual.substring(0, actual.length() - ".root".length())
+                : actual;
+        String expectedBase = expectedRoot
+                ? expected.substring(0, expected.length() - ".root".length())
+                : expected;
+        String identityPrefix = expectedBase + ".";
+        if (!actualBase.startsWith(identityPrefix)) {
+            return false;
+        }
+        String identity = actualBase.substring(identityPrefix.length());
+        return !identity.isEmpty()
+                && identity.chars().allMatch(Character::isDigit);
+    }
+
     /** Exact identity for one Java method in HotSpot commands and Jeandle IR. */
     public static final class MethodId {
         private final Method method;
@@ -1357,7 +1387,7 @@ public final class PEATestUtils {
                     if (!summary.matches()) {
                         throw malformed(method, "malformed PEA summary: " + line);
                     }
-                    if (!summary.group(1).equals(function)) {
+                    if (!matchesRuntimeFunctionName(summary.group(1), function)) {
                         if (current != null && !current.afterSeen) {
                             throw malformed(method,
                                     "interleaved summary before after marker");
@@ -1412,7 +1442,7 @@ public final class PEATestUtils {
                 Matcher marker = MARKER.matcher(line);
                 if (marker.matches()) {
                     String markerFunction = marker.group(3);
-                    boolean matches = markerFunction.equals(function);
+                    boolean matches = matchesRuntimeFunctionName(markerFunction, function);
                     if (!matches) {
                         if (current != null && !current.afterSeen) {
                             throw malformed(method, "interleaved marker before after marker");
@@ -1467,7 +1497,7 @@ public final class PEATestUtils {
                 Matcher stats = STATS.matcher(line);
                 if (stats.matches()) {
                     capture = Capture.NONE;
-                    if (!stats.group(1).equals(function)) {
+                    if (!matchesRuntimeFunctionName(stats.group(1), function)) {
                         continue;
                     }
                     if (current == null || current.afterSeen) {
@@ -1491,7 +1521,7 @@ public final class PEATestUtils {
                         throw malformed(method, "malformed LockReplay line: " + line);
                     }
                     String effectFunction = decodeLLVMOperand(lockReplay.group(1));
-                    if (!effectFunction.equals(function)) {
+                    if (!matchesRuntimeFunctionName(effectFunction, function)) {
                         continue;
                     }
                     if (current == null || current.afterSeen) {
@@ -1509,7 +1539,7 @@ public final class PEATestUtils {
                 if (effect.matches()) {
                     capture = Capture.NONE;
                     String effectFunction = decodeLLVMOperand(effect.group(2));
-                    if (!effectFunction.equals(function)) {
+                    if (!matchesRuntimeFunctionName(effectFunction, function)) {
                         continue;
                     }
                     if (current == null || current.afterSeen) {
@@ -1983,7 +2013,7 @@ public final class PEATestUtils {
             for (int i = 0; i < folded.size(); i++) {
                 String line = folded.get(i);
                 String defined = definedFunctionName(line);
-                if (!method.llvmFunctionName().equals(defined)) {
+                if (!matchesRuntimeFunctionName(defined, method.llvmFunctionName())) {
                     continue;
                 }
                 ArrayList<String> body = new ArrayList<>();
@@ -2378,7 +2408,7 @@ public final class PEATestUtils {
             for (CompleteCallInstruction call : callInstructions()) {
                 String instruction = call.text();
                 String callee = calledFunctionName(instruction);
-                if (exactCallee.equals(callee)) {
+                if (matchesRuntimeFunctionName(callee, exactCallee)) {
                     matches.add(instruction);
                 }
             }

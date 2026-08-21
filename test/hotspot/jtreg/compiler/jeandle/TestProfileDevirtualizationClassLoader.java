@@ -22,9 +22,12 @@
  * @test
  * @summary Profile devirtualization must distinguish same-named methods from
  *          different class loaders
+ * @library /test/lib /
+ * @build compiler.jeandle.fileCheck.FileCheck
  * @modules java.base/jdk.internal.org.objectweb.asm
  * @run main/othervm -Xbatch -XX:-TieredCompilation -XX:+UseJeandleCompiler
  *                   -XX:+JeandleUseProfiledVirtualCallDevirtualization
+ *                   -XX:-Inline -XX:+JeandleDumpIR
  *                   -XX:CompileCommand=quiet
  *                   -XX:CompileCommand=compileonly,compiler.jeandle.TestProfileDevirtualizationClassLoader::profiledCall
  *                   compiler.jeandle.TestProfileDevirtualizationClassLoader
@@ -32,6 +35,7 @@
 
 package compiler.jeandle;
 
+import compiler.jeandle.fileCheck.FileCheck;
 import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
 
@@ -99,6 +103,15 @@ public class TestProfileDevirtualizationClassLoader {
             throw new AssertionError("wrong result: expected=" + expected +
                     ", actual=" + actual);
         }
+
+        FileCheck fileCheck = new FileCheck(System.getProperty("user.dir"),
+                TestProfileDevirtualizationClassLoader.class.getDeclaredMethod(
+                        "profiledCall", Value.class), true);
+        String targetPattern =
+                "declare hotspotcc i32 .*ProfileTarget_value.*\\.[0-9]+";
+        fileCheck.checkPattern(targetPattern);
+        fileCheck.checkPattern(targetPattern);
+        fileCheck.checkNot("__jeandle_dynamic_call.");
     }
 
     private static Value newTarget(int result) throws Exception {

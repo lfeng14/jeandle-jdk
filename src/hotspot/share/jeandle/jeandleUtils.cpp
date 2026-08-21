@@ -221,13 +221,9 @@ std::string JeandleFuncSig::method_name(ciMethod* method) {
 std::string JeandleFuncSig::method_name_with_signature(ciMethod* method) {
   std::string signature =
       std::string(method->signature()->as_symbol()->as_utf8());
-  // A Java class is identified by both its defining class loader and its
-  // binary name. Dynamically generated classes from different loaders may
-  // therefore have the same class/method/signature spelling while denoting
-  // different Methods. Keep the readable spelling, but append the ciMethod
-  // identity used by the active compilation so every Java method gets a
-  // distinct LLVM symbol in the module.
-  return method_name(method) + signature + ".jeandle_method_" +
+  // The binary name does not distinguish classes defined by different class
+  // loaders. Append the ciMethod identity so their LLVM symbols stay distinct.
+  return method_name(method) + signature + "." +
          std::to_string(reinterpret_cast<uintptr_t>(method));
 }
 
