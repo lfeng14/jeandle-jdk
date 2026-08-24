@@ -142,10 +142,15 @@ JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
     return {};
   }
 
+  auto resolve_target = [&](ciKlass* receiver) -> ciMethod* {
+    ciMethod* target =
+        resolve_profile_virtual_target(_method, callee, holder, receiver);
+    return target != nullptr && !target->is_abstract() ? target : nullptr;
+  };
+
   ciKlass* receiver = call_profile.receiver(0);
-  ciMethod* target =
-      resolve_profile_virtual_target(_method, callee, holder, receiver);
-  if (target == nullptr || target->is_abstract()) {
+  ciMethod* target = resolve_target(receiver);
+  if (target == nullptr) {
     return {};
   }
 
@@ -159,9 +164,8 @@ JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
       }
     } else {
       receiver2 = call_profile.receiver(1);
-      target2 =
-          resolve_profile_virtual_target(_method, callee, holder, receiver2);
-      if (target2 == nullptr || target2->is_abstract()) {
+      target2 = resolve_target(receiver2);
+      if (target2 == nullptr) {
         if (!has_major_receiver) {
           return {};
         }

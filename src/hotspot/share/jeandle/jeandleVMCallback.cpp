@@ -827,6 +827,16 @@ static void record_profile_receiver(ciKlass* receiver) {
   env->oop_recorder()->find_index(receiver->constant_encoding());
 }
 
+static llvm::jeandle::ProfileDevirtualizationTargetResult
+make_profile_target_result(ciKlass* receiver, ciMethod* target,
+                           int64_t count) {
+  assert(receiver != nullptr && target != nullptr,
+         "profile target must be resolved");
+  return {reinterpret_cast<uintptr_t>(receiver->constant_encoding()),
+          reinterpret_cast<uintptr_t>(target), count,
+          JeandleFuncSig::method_name_with_signature(target)};
+}
+
 llvm::jeandle::ProfileDevirtualizationResult
 JeandleVMCallback::get_profile_devirtualization_info(
     uintptr_t caller_ptr, uintptr_t callee_ptr, uintptr_t holder_ptr, int bci,
@@ -854,16 +864,13 @@ JeandleVMCallback::get_profile_devirtualization_info(
     record_profile_receiver(opt_info.receiver2);
   }
 
-  llvm::jeandle::ProfileDevirtualizationTargetResult target{
-      reinterpret_cast<uintptr_t>(opt_info.receiver->constant_encoding()),
-      reinterpret_cast<uintptr_t>(opt_info.target), opt_info.receiver_count,
-      JeandleFuncSig::method_name_with_signature(opt_info.target)};
+  llvm::jeandle::ProfileDevirtualizationTargetResult target =
+      make_profile_target_result(opt_info.receiver, opt_info.target,
+                                 opt_info.receiver_count);
   llvm::jeandle::ProfileDevirtualizationTargetResult target2;
   if (opt_info.receiver2 != nullptr) {
-    target2 = {
-        reinterpret_cast<uintptr_t>(opt_info.receiver2->constant_encoding()),
-        reinterpret_cast<uintptr_t>(opt_info.target2), opt_info.receiver_count2,
-        JeandleFuncSig::method_name_with_signature(opt_info.target2)};
+    target2 = make_profile_target_result(opt_info.receiver2, opt_info.target2,
+                                         opt_info.receiver_count2);
   }
   return {std::move(target), opt_info.total_count,
           llvm::jeandle::ProfileDevirtualizationInfo::packDeoptInfo(
