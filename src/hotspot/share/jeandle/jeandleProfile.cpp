@@ -116,17 +116,9 @@ static ciMethod* resolve_profile_virtual_target(ciMethod* caller,
                                 receiver->as_instance_klass());
 }
 
-JeandleProfile::DevirtualizationInfo
-JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
-                                    int bci) const {
-  if (_method == nullptr || callee == nullptr || holder == nullptr ||
-      callee->can_be_statically_bound() || !is_mature() ||
-      !UseTypeProfile || !UseJeandleCompiler ||
-      !JeandleUseProfiledVirtualCallDevirtualization) {
-    return {};
-  }
-
-  ciCallProfile call_profile = _method->call_profile_at_bci(bci);
+static JeandleProfile::DevirtualizationInfo
+select_profile_targets(ciMethod* caller, ciMethod* callee,
+                       ciInstanceKlass* holder, ciCallProfile& call_profile) {
   if (!call_profile.has_receiver(0) || call_profile.count() <= 0 ||
       call_profile.receiver_count(0) <= 0) {
     return {};
@@ -144,7 +136,7 @@ JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
 
   auto resolve_target = [&](ciKlass* receiver) -> ciMethod* {
     ciMethod* target =
-        resolve_profile_virtual_target(_method, callee, holder, receiver);
+        resolve_profile_virtual_target(caller, callee, holder, receiver);
     return target != nullptr && !target->is_abstract() ? target : nullptr;
   };
 
@@ -170,14 +162,41 @@ JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
           return {};
         }
         receiver2 = nullptr;
-        target2 = nullptr;
       } else {
         receiver_count2 = call_profile.receiver_count(1);
       }
     }
   }
 
-  Deoptimization::DeoptReason reason = receiver2 == nullptr
+  JeandleProfile::DevirtualizationInfo result;
+  result.receiver = receiver;
+  result.target = target;
+  result.receiver_count = receiver_count;
+  result.total_count = total_count;
+  result.receiver2 = receiver2;
+  result.target2 = target2;
+  result.receiver_count2 = receiver_count2;
+  return result;
+}
+
+JeandleProfile::DevirtualizationInfo
+JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
+                                    int bci) const {
+  if (_method == nullptr || callee == nullptr || holder == nullptr ||
+      callee->can_be_statically_bound() || !is_mature() || !UseTypeProfile ||
+      !UseJeandleCompiler || !JeandleUseProfiledVirtualCallDevirtualization) {
+    return {};
+  }
+
+  ciCallProfile call_profile = _method->call_profile_at_bci(bci);
+  int morphism = call_profile.morphism();
+  DevirtualizationInfo result =
+      select_profile_targets(_method, callee, holder, call_profile);
+  if (!result.is_valid()) {
+    return {};
+  }
+
+  Deoptimization::DeoptReason reason = result.receiver2 == nullptr
                                            ? Deoptimization::Reason_class_check
                                            : Deoptimization::Reason_bimorphic;
   bool too_many_traps_or_recompiles = has_trap_at(bci, reason) ||
@@ -186,31 +205,33 @@ JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
   // Match C2's hysteresis: an initial miss refreshes receiver profiling through
   // deoptimization. Once the same BCI/reason has trapped, subsequent compiles
   // keep the guarded fast path but select a dynamic virtual-call miss path.
-  bool deoptimize_on_miss =
-      (morphism == 1 || receiver2 != nullptr) && !too_many_traps_or_recompiles;
+  bool deoptimize_on_miss = (morphism == 1 || result.receiver2 != nullptr) &&
+                            !too_many_traps_or_recompiles;
 
-  if (receiver2 == nullptr) {
+  if (result.receiver2 == nullptr) {
     log_debug(jeandle)("profile_devirt_candidate: caller=%s bci=%d receiver=%s "
                        "target=%s count=" INT64_FORMAT " total=" INT64_FORMAT
                        " morphism=%d miss=%s",
                        _method->name()->as_utf8(), bci,
-                       receiver->name()->as_utf8(), target->name()->as_utf8(),
-                       receiver_count, total_count, morphism,
+                       result.receiver->name()->as_utf8(),
+                       result.target->name()->as_utf8(), result.receiver_count,
+                       result.total_count, morphism,
                        deoptimize_on_miss ? "uncommon_trap" : "virtual_call");
   } else {
     log_debug(jeandle)(
         "profile_devirt_candidate: caller=%s bci=%d receiver=%s "
         "receiver2=%s target=%s target2=%s count=" INT64_FORMAT
         " count2=" INT64_FORMAT " total=" INT64_FORMAT " morphism=%d miss=%s",
-        _method->name()->as_utf8(), bci, receiver->name()->as_utf8(),
-        receiver2->name()->as_utf8(), target->name()->as_utf8(),
-        target2->name()->as_utf8(), receiver_count, receiver_count2,
-        total_count, morphism,
+        _method->name()->as_utf8(), bci, result.receiver->name()->as_utf8(),
+        result.receiver2->name()->as_utf8(), result.target->name()->as_utf8(),
+        result.target2->name()->as_utf8(), result.receiver_count,
+        result.receiver_count2, result.total_count, morphism,
         deoptimize_on_miss ? "uncommon_trap" : "virtual_call");
   }
 
-  return {receiver, target, receiver_count, total_count, reason,
-          deoptimize_on_miss, receiver2, target2, receiver_count2};
+  result.deopt_reason = reason;
+  result.deoptimize_on_miss = deoptimize_on_miss;
+  return result;
 }
 
 // A branch/case count too large to fit in a signed int is treated as
