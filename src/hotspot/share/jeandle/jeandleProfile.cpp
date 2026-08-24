@@ -21,6 +21,7 @@
 #include "jeandle/jeandleProfile.hpp"
 #include "jeandle/jeandleCompilation.hpp"
 #include "jeandle/jeandle_globals.hpp"
+#include "jeandle/jeandleUtils.hpp"
 
 #include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "ci/ciCallProfile.hpp"
@@ -108,17 +109,11 @@ static ciMethod* resolve_profile_virtual_target(ciMethod* caller,
     return nullptr;
   }
 
-  if (!receiver->is_instance_klass()) {
+  if (!is_valid_instance_receiver(receiver, holder)) {
     return nullptr;
   }
-
-  ciInstanceKlass* receiver_klass = receiver->as_instance_klass();
-  if (!receiver_klass->is_loaded() || !receiver_klass->is_initialized() ||
-      receiver_klass->is_interface() ||
-      !receiver_klass->is_subtype_of(holder)) {
-    return nullptr;
-  }
-  return callee->resolve_invoke(caller->holder(), receiver_klass);
+  return callee->resolve_invoke(caller->holder(),
+                                receiver->as_instance_klass());
 }
 
 JeandleProfile::DevirtualizationInfo

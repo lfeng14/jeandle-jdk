@@ -682,9 +682,7 @@ llvm::jeandle::CHAOptInfo optimize_virtual_call(ciMethod* caller,
       JeandleVMCallback::get_receiver_instance_klass(receiver_klass);
   ciInstanceKlass* actual_receiver = holder;
   bool actual_receiver_is_exact = false;
-  if (receiver_inst_klass->is_loaded() && receiver_inst_klass->is_initialized() &&
-      !receiver_inst_klass->is_interface() &&
-      (receiver_inst_klass == actual_receiver || receiver_inst_klass->is_subtype_of(actual_receiver))) {
+  if (is_valid_instance_receiver(receiver_inst_klass, actual_receiver)) {
     actual_receiver = receiver_inst_klass;
     actual_receiver_is_exact = is_exact;
   }
