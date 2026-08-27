@@ -78,12 +78,10 @@ bool JeandleProfile::has_too_many_recompiles(
   uint method_cutoff = static_cast<uint>(PerMethodRecompilationCutoff) / 2 + 1;
   Deoptimization::DeoptReason per_bc_reason =
       Deoptimization::reason_recorded_per_bytecode_if_any(reason);
-  ciMethod* trap_method =
-      Deoptimization::reason_is_speculate(reason) ? _method : nullptr;
 
   if ((per_bc_reason == Deoptimization::Reason_none ||
-       _mdo->has_trap_at(bci, trap_method, reason) != 0) &&
-      _mdo->trap_recompiled_at(bci, trap_method) &&
+       _mdo->has_trap_at(bci, nullptr, reason) != 0) &&
+      _mdo->trap_recompiled_at(bci, nullptr) &&
       _mdo->overflow_recompile_count() >= bc_cutoff) {
     return true;
   }
@@ -150,17 +148,10 @@ select_profile_targets(ciMethod* caller, ciMethod* callee,
   ciMethod* target2 = nullptr;
   int64_t receiver_count2 = 0;
   if (bimorphic_candidate) {
-    if (!call_profile.has_receiver(1) || call_profile.receiver_count(1) <= 0) {
-      if (!has_major_receiver) {
-        return {};
-      }
-    } else {
+    if (call_profile.has_receiver(1) && call_profile.receiver_count(1) > 0) {
       receiver2 = call_profile.receiver(1);
       target2 = resolve_target(receiver2);
       if (target2 == nullptr) {
-        if (!has_major_receiver) {
-          return {};
-        }
         receiver2 = nullptr;
       } else {
         receiver_count2 = call_profile.receiver_count(1);
@@ -196,17 +187,16 @@ JeandleProfile::devirtualization_at(ciMethod* callee, ciInstanceKlass* holder,
     return {};
   }
 
-  Deoptimization::DeoptReason reason = result.receiver2 == nullptr
-                                           ? Deoptimization::Reason_class_check
-                                           : Deoptimization::Reason_bimorphic;
-  bool too_many_traps_or_recompiles = has_trap_at(bci, reason) ||
-                                      has_too_many_traps(reason) ||
-                                      has_too_many_recompiles(bci, reason);
+  Deoptimization::DeoptReason reason = morphism == 2
+                                           ? Deoptimization::Reason_bimorphic
+                                           : Deoptimization::Reason_class_check;
   // Match C2's hysteresis: an initial miss refreshes receiver profiling through
   // deoptimization. Once the same BCI/reason has trapped, subsequent compiles
   // keep the guarded fast path but select a dynamic virtual-call miss path.
   bool deoptimize_on_miss = (morphism == 1 || result.receiver2 != nullptr) &&
-                            !too_many_traps_or_recompiles;
+                            !has_trap_at(bci, reason) &&
+                            !has_too_many_traps(reason) &&
+                            !has_too_many_recompiles(bci, reason);
 
   if (result.receiver2 == nullptr) {
     log_debug(jeandle)("profile_devirt_candidate: caller=%s bci=%d receiver=%s "
