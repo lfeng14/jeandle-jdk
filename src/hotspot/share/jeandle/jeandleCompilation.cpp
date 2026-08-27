@@ -64,7 +64,6 @@
 #include "jeandle/__hotspotHeadersBegin__.hpp"
 #include "ci/ciCallProfile.hpp"
 #include "ci/ciKlass.hpp"
-#include "ci/ciMethodData.hpp"
 #include "ci/ciObject.hpp"
 #include "ci/ciReplay.hpp"
 #include "ci/ciMethodBlocks.hpp"
@@ -1314,28 +1313,6 @@ void JeandleCompilation::initialize() {
   auto now = std::chrono::system_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
   _comp_start_time = std::to_string(duration.count());
-}
-
-void JeandleCompilation::accumulate_trap_counts_from_mdo(ciMethod* method) {
-  ciMethodData* md = method->method_data();
-
-  for (uint reason = 0; reason < md->trap_reason_limit(); reason++) {
-    uint md_count = md->trap_count(reason);
-    if (md_count != 0) {
-      if (md_count >= md->trap_count_limit()) {
-        md_count = md->trap_count_limit() + md->overflow_trap_count();
-      }
-      uint total_count = trap_count(reason);
-      uint old_count = total_count;
-      total_count += md_count;
-      // Saturate the add if it overflows.
-      if (total_count < old_count || total_count < md_count) {
-        total_count = uint(-1);
-      }
-      _trap_hist[reason] = total_count;
-    }
-  }
-  add_decompile_count(md->decompile_count());
 }
 
 void JeandleCompilation::setup_llvm_module(llvm::MemoryBuffer* template_buffer) {

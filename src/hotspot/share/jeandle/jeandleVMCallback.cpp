@@ -564,7 +564,6 @@ bool JeandleVMCallback::record_inline_result(int scope_id, int bci, uintptr_t ca
     // IsOkToInline has already prepared this tree, so a successful result only
     // commits metadata in the same successful-inline order as LLVM's InlineScopes.
     comp->commit_inline_tree_for_callee(scope_id, bci, callee);
-    comp->accumulate_trap_counts_from_mdo(callee);
   } else {
     comp->record_inline_failure(scope_id,
                                 bci,
@@ -890,25 +889,13 @@ bool JeandleVMCallback::update_call_site(int64_t id, int dest, bool need_attache
 // Profile-guided devirtualization
 // ---------------------------------------------------------------------------
 
-static void record_profile_receiver(ciKlass* receiver) {
-  assert(receiver != nullptr, "profile receiver must be present");
-  ciEnv* env = ciEnv::current();
-  assert(env != nullptr && env->oop_recorder() != nullptr,
-         "profile devirtualization must run in an active compilation");
-  // LLVM embeds the Klass* value in the exact-receiver guard. Recording it in
-  // the nmethod metadata table lets class unloading discover the dependency
-  // and invalidate the nmethod before that address can be reused.
-  env->oop_recorder()->find_index(receiver->constant_encoding());
-}
-
 static llvm::jeandle::ProfileDevirtualizationTargetResult
 make_profile_target_result(ciKlass* receiver, ciMethod* target,
                            int64_t count) {
   assert(receiver != nullptr && target != nullptr,
          "profile target must be resolved");
-  return {reinterpret_cast<uintptr_t>(receiver->constant_encoding()),
-          reinterpret_cast<uintptr_t>(target), count,
-          JeandleFuncSig::method_name_with_signature(target)};
+  return {record_klass_metadata(receiver), reinterpret_cast<uintptr_t>(target),
+          count, JeandleFuncSig::method_name_with_signature(target)};
 }
 
 llvm::jeandle::ProfileDevirtualizationResult
@@ -931,11 +918,6 @@ JeandleVMCallback::get_profile_devirtualization_info(
       JeandleProfile(caller).devirtualization_at(callee, holder, bci);
   if (!opt_info.is_valid()) {
     return {};
-  }
-
-  record_profile_receiver(opt_info.receiver);
-  if (opt_info.receiver2 != nullptr) {
-    record_profile_receiver(opt_info.receiver2);
   }
 
   llvm::jeandle::ProfileDevirtualizationTargetResult target =
