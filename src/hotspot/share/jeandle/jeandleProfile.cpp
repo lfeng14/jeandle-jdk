@@ -56,7 +56,13 @@ bool JeandleProfile::has_trap_at(int bci,
   // Treat the conservative "maybe trapped here" answer as a real trap for
   // speculation gating. Metadata-only uses such as branch_weights do not need
   // this guard; uncommon-trap/speculative transforms do.
-  return _mdo->has_trap_at(bci, nullptr, reason) != 0;
+  JeandleCompilation* compilation = JeandleCompilation::current();
+  // Speculative trap data is keyed by the compilation root, not the inline
+  // method whose MDO is being queried.
+  ciMethod* trap_method =
+      Deoptimization::reason_is_speculate(reason) ? compilation->method()
+                                                  : nullptr;
+  return _mdo->has_trap_at(bci, trap_method, reason) != 0;
 }
 
 bool JeandleProfile::has_too_many_traps(
@@ -78,15 +84,20 @@ bool JeandleProfile::has_too_many_recompiles(
   uint method_cutoff = static_cast<uint>(PerMethodRecompilationCutoff) / 2 + 1;
   Deoptimization::DeoptReason per_bc_reason =
       Deoptimization::reason_recorded_per_bytecode_if_any(reason);
+  JeandleCompilation* compilation = JeandleCompilation::current();
+  // Match C2: speculative trap data is associated with the root compilation
+  // method, while _method identifies the MDO being queried.
+  ciMethod* trap_method =
+      Deoptimization::reason_is_speculate(reason) ? compilation->method()
+                                                  : nullptr;
 
   if ((per_bc_reason == Deoptimization::Reason_none ||
-       _mdo->has_trap_at(bci, nullptr, reason) != 0) &&
-      _mdo->trap_recompiled_at(bci, nullptr) &&
+       _mdo->has_trap_at(bci, trap_method, reason) != 0) &&
+      _mdo->trap_recompiled_at(bci, trap_method) &&
       _mdo->overflow_recompile_count() >= bc_cutoff) {
     return true;
   }
 
-  JeandleCompilation* compilation = JeandleCompilation::current();
   return compilation->trap_count(reason) != 0 &&
          compilation->decompile_count() >= method_cutoff;
 }
